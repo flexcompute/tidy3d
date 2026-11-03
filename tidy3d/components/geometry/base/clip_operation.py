@@ -25,6 +25,7 @@ from .utils import cleanup_shapely_object
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Self
 
     from numpy.typing import NDArray
 
@@ -379,6 +380,16 @@ class ClipOperation(Geometry):
             geometry_key, *sub_path = path
             geometry_paths[geometry_key].append(tuple(sub_path))
         return geometry_paths
+
+    def _adjoint_sampling_geometry(self, settings: GeometryAdjointSettings) -> Self:
+        """Use each operand's sampled boundary for Boolean containment."""
+        updates = {
+            name: getattr(self, name)._adjoint_sampling_geometry(settings)
+            for name in ("geometry_a", "geometry_b")
+        }
+        if all(value is getattr(self, name) for name, value in updates.items()):
+            return self
+        return self.updated_copy(deep=False, validate=False, **updates)
 
     def _make_adjoint_sample_sets(
         self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings

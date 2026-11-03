@@ -20,4 +20,5 @@ def adjoint_settings_from_config() -> GeometryAdjointSettings:
         quadrature_sample_fraction=adjoint_cfg.quadrature_sample_fraction,
         gauss_quadrature_order=adjoint_cfg.gauss_quadrature_order,
         points_per_wavelength=adjoint_cfg.points_per_wavelength,
+        polyslab_bulge_min_segments=adjoint_cfg.polyslab_bulge_min_segments,
     )

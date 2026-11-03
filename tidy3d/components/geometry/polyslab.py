@@ -18,19 +18,19 @@ from flexcompute.geometry.validation.polyslab import (
     validate_polyslab,
 )
 from numpy.polynomial.legendre import leggauss as _leggauss
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from tidy3d._optional_imports import check_import, verify_packages_import
-from tidy3d.components.autograd import TracedArrayFloat2D, get_static
+from tidy3d.components.autograd import TracedArrayFloat1D, TracedArrayFloat2D, get_static
 from tidy3d.components.autograd.path_utils import traced_paths
 from tidy3d.components.autograd.types import PathType, TracedFloat
 from tidy3d.components.autograd.utils import hasbox
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import IndexedDataArray
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
-from tidy3d.exceptions import AdjointError, Tidy3dImportError, ValidationError
+from tidy3d.exceptions import AdjointError, SetupError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
 
 from . import base, triangulation
@@ -39,6 +39,7 @@ from .vertex_utils import remove_adjacent_duplicate_vertices
 
 if TYPE_CHECKING:
     from types import NotImplementedType
+    from typing import Self
 
     from gdstk import Cell
     from numpy.typing import DTypeLike, NDArray
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.autograd.types import GeometryAdjointSettings
     from tidy3d.components.types import (
+        ArrayFloat1D,
         ArrayFloat2D,
         ArrayLike,
         Axis,
@@ -133,7 +135,7 @@ class _PolyBulgeUtil:
 
         arc_starts = np.asarray(arc_starts, dtype=float)
         arc_ends = np.asarray(arc_ends, dtype=float)
-        bulges = np.asarray(bulges, dtype=float)
+        bulges = np.array(bulges, dtype=float)
 
         # Validate that no bulges are close to 0
         if np.any(np.isclose(bulges, 0)):
@@ -206,7 +208,7 @@ class _PolyBulgeUtil:
             Always contains 'arc_mask' that encodes which edges are arcs. When arcs exist, also contains
             'centers', 'radii', 'start_angles', 'end_angles', 'included_angles'.
         """
-        bulges = np.asarray(bulges)
+        bulges = np.array(bulges)
         arc_mask = ~np.isclose(bulges, 0)
 
         if not np.any(arc_mask):
@@ -433,7 +435,7 @@ class _PolyBulgeUtil:
 
         # Sign: positive included_angle → outward bulge → adds area (for CCW polygon)
         bulge_signs = np.sign(bulge_data["included_angles"])
-        return float(np.sum(bulge_signs * segment_areas))
+        return np.sum(bulge_signs * segment_areas)
 
     @staticmethod
     def _polygon_perimeter(vertices: ArrayFloat2D, bulge_data: dict) -> float:
@@ -464,6 +466,64 @@ class _PolyBulgeUtil:
 
         return float(np.sum(edge_lengths))
 
+    @staticmethod
+    def _arc_points_and_bulge_velocity(
+        arc_start: ArrayFloat1D,
+        arc_end: ArrayFloat1D,
+        bulge: float,
+        parameters: ArrayFloat1D,
+    ) -> tuple[ArrayFloat2D, ArrayFloat2D, ArrayFloat2D, ArrayFloat2D]:
+        """Return arc points, their full ``dpoint/dbulge``, tangents, and right normals."""
+        chord = np.asarray(arc_end) - np.asarray(arc_start)
+        chord_length = np.linalg.norm(chord)
+        tangent = chord / chord_length
+        right_normal = np.array([tangent[1], -tangent[0]])
+        parameters = np.asarray(parameters)
+
+        if np.isclose(bulge, 0):
+            points = np.asarray(arc_start) + parameters[:, None] * chord
+            normal_velocity = 2.0 * chord_length * parameters * (1.0 - parameters)
+            tangents = np.broadcast_to(tangent, points.shape)
+            normals = np.broadcast_to(right_normal, points.shape)
+            return points, normal_velocity[:, None] * normals, tangents, normals
+
+        half_chord = chord_length / 2.0
+        midpoint = (np.asarray(arc_start) + np.asarray(arc_end)) / 2.0
+        alpha = 2.0 * np.arctan(bulge) * (2.0 * parameters - 1.0)
+        sin_half = np.sin(alpha / 2.0)
+        cos_half = np.cos(alpha / 2.0)
+        sin_half_over_bulge = sin_half / bulge
+        bulge_factor = 1.0 + bulge**2
+        tangent_offset = half_chord * bulge_factor * sin_half_over_bulge * cos_half
+        normal_offset = half_chord * bulge * (1.0 - bulge_factor * sin_half_over_bulge**2)
+        points = (
+            midpoint + tangent_offset[:, None] * tangent + normal_offset[:, None] * right_normal
+        )
+        sin_alpha = np.sin(alpha)
+        cos_alpha = np.cos(alpha)
+        tangents = cos_alpha[:, None] * tangent - sin_alpha[:, None] * right_normal
+        normals = sin_alpha[:, None] * tangent + cos_alpha[:, None] * right_normal
+        # V_n = h/2 * ((1 + 1/b**2) cos(alpha) + 1 - 1/b**2).
+        # Half-angle identities remove cancellation of the 1/b**2 terms.
+        normal_velocity = half_chord * (cos_half**2 - sin_half_over_bulge**2)
+        q = 2.0 * parameters.astype(float) - 1.0
+        if abs(bulge) < 1e-3:
+            # The direct tangent formula subtracts O(1/b) terms to get O(b).
+            # This cubic expansion has O(h*b**5) absolute error (<1e-15*h here).
+            tangent_velocity = half_chord * (
+                2.0 / 3.0 * (q**3 - q) * bulge + 2.0 / 15.0 * (q - q**5) * bulge**3
+            )
+        else:
+            half_angle = np.arctan(float(bulge)) * q
+            tangent_velocity = (
+                half_chord
+                / bulge
+                * (q - (1.0 + float(bulge) ** 2) * np.sin(half_angle) / bulge * np.cos(half_angle))
+            )
+        tangent_velocity = tangent_velocity.astype(points.dtype, copy=False)
+        velocity = normal_velocity[:, None] * normals + tangent_velocity[:, None] * tangents
+        return points, velocity, tangents, normals
+
 
 class PolySlab(base.Planar):
     """Polygon extruded with optional sidewall angle along axis direction.
@@ -485,6 +545,7 @@ class PolySlab(base.Planar):
 
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths(
         "vertices",
+        "bulges",
         "sidewall_angle",
         ("slab_bounds", 0),
         ("slab_bounds", 1),
@@ -513,7 +574,7 @@ class PolySlab(base.Planar):
         json_schema_extra={"units": MICROMETER},
     )
 
-    bulges: ArrayFloat1D | None = Field(
+    bulges: TracedArrayFloat1D | None = Field(
         default=None,
         title="Bulges In Segments",
         description="List of values describing the bulge of each edge, following the typical convention: "
@@ -535,6 +596,26 @@ class PolySlab(base.Planar):
         """Make a shapely polygon from some vertices, first ensures they are untraced."""
         vertices = get_static(vertices)
         return shapely.Polygon(vertices)
+
+    @model_validator(mode="after")
+    def _validate_traced_bulge_limits(self) -> Self:
+        """Traced zero bulges must obey the same limits as nonzero arcs."""
+        if not hasbox(self.bulges):
+            return self
+        if hasbox(self.sidewall_angle) or not self._has_vertical_sidewall:
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Bulges are traced in the polygon. 'sidewall_angle' must be 0 "
+                    "and cannot be traced by autograd."
+                ),
+                "sidewall_angle",
+            )
+        if not math.isclose(self.dilation, 0):
+            self._raise_validation_error_at_loc(
+                SetupError("Bulges are traced in the polygon. 'dilation' value must be 0."),
+                "dilation",
+            )
+        return self
 
     @classmethod
     def from_gds(
@@ -816,7 +897,11 @@ class PolySlab(base.Planar):
         if self.bulges is None:
             proper = self._proper_vertices(self.vertices)
             return proper, np.zeros(proper.shape[0])
-        return self._canonicalize_vertices_and_bulges(self.vertices, self.bulges)
+        # Canonical geometry is used by validation and serialization; keep it static so
+        # those paths do not send traced arc geometry into shapely or array-shape operations.
+        bulges = get_static(self.bulges)
+        vertices = self.vertices if np.allclose(bulges, 0) else get_static(self.vertices)
+        return self._canonicalize_vertices_and_bulges(vertices, bulges)
 
     @property
     def _bulges(self) -> ArrayFloat1D:
@@ -1894,6 +1979,13 @@ class PolySlab(base.Planar):
 
     def _volume(self, bounds: Bound) -> float:
         """Returns object's volume within given bounds."""
+        if hasbox(self.bulges) or (self._has_arc_segments and hasbox(self.vertices)):
+            raise AdjointError(
+                "Direct differentiation of 'PolySlab.volume()' with respect to 'bulges' "
+                "or arc-segment 'vertices' "
+                "is not supported. Use 'polyslab.to_static().volume()' for a value "
+                "without derivatives."
+            )
 
         z_min, z_max = self.slab_bounds
 
@@ -1916,6 +2008,13 @@ class PolySlab(base.Planar):
 
     def _surface_area(self, bounds: Bound) -> float:
         """Returns object's surface area within given bounds."""
+        if hasbox(self.bulges) or (self._has_arc_segments and hasbox(self.vertices)):
+            raise AdjointError(
+                "Direct differentiation of 'PolySlab.surface_area()' with respect to 'bulges' "
+                "or arc-segment 'vertices' "
+                "is not supported. Use 'polyslab.to_static().surface_area()' for a value "
+                "without derivatives."
+            )
 
         area = 0
 
@@ -1957,19 +2056,33 @@ class PolySlab(base.Planar):
 
     def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced PolySlab path for adjoint routing."""
-        if self._has_arc_segments:
+        if field_path == ("bulges",):
+            if self.bulges is None:
+                raise AdjointError(
+                    "'PolySlab.bulges' derivatives require an explicit bulges array."
+                )
+            if (
+                hasbox(self.sidewall_angle)
+                or not self._has_vertical_sidewall
+                or not math.isclose(self.dilation, 0)
+            ):
+                raise AdjointError(
+                    "'PolySlab.bulges' derivatives require 'sidewall_angle=0' and 'dilation=0', "
+                    "including when all bulge values are zero."
+                )
+        if self._has_arc_segments and field_path[0] not in ("vertices", "bulges", "slab_bounds"):
+            parameter = "placement" if field_path == _TRANSLATION_PATH else f"path {field_path!r}"
             raise AdjointError(
-                "Automatic differentiation with respect to PolySlab geometry parameters is not "
-                "supported when vertices include non-zero bulge values. Use straight-edged "
-                "polyslabs for inverse design optimization."
+                f"Automatic differentiation with respect to PolySlab {parameter} is not "
+                "supported when vertices include non-zero bulge values. Only 'vertices', "
+                "'bulges', and 'slab_bounds' are supported for arc-containing PolySlabs."
             )
-
         return super()._resolve_autograd_route(field_path)
 
     @staticmethod
     def _canonical_key_for_path(path: PathType) -> PathType | None:
         """Canonical sample-set key serving the given derivative path, if any."""
-        if path == ("vertices",):
+        if path in (("vertices",), ("bulges",)):
             return _POLYSLAB_SIDEWALL_KEY
         if path == ("sidewall_angle",):
             return _POLYSLAB_SIDEWALL_ANGLE_KEY
@@ -2018,19 +2131,21 @@ class PolySlab(base.Planar):
             )
             return {key: SurfaceSampleSet.empty() for key in path_by_key}
 
+        surrogate = self._bulge_surrogate(settings, differentiate_bulges=("bulges",) in paths)
+        sampler = self if surrogate is None else surrogate[0]
         sample_sets = {}
         # Canonical order keeps equivalent geometry parameterizations' sampling
         # clouds identical, independent of derivative-path order.
         for key in sorted(path_by_key, key=str):
             if key == _POLYSLAB_SIDEWALL_KEY:
-                if ("vertices",) in paths:
-                    vertices = self._vertex_gradient_reference_polygon
+                if ("vertices",) in paths or ("bulges",) in paths:
+                    vertices = sampler._vertex_gradient_reference_polygon
                 else:
-                    vertices = self.reference_polygon
-                    if not self.is_ccw:
+                    vertices = sampler.reference_polygon
+                    if not sampler.is_ccw:
                         vertices = vertices[::-1]
                 sample_sets.update(
-                    self._make_sidewall_sample_sets(
+                    sampler._make_sidewall_sample_sets(
                         sim_min=sim_min,
                         sim_max=sim_max,
                         is_2d=is_2d,
@@ -2061,7 +2176,7 @@ class PolySlab(base.Planar):
                 ):
                     sample_set = None
                 else:
-                    sample_set = self._make_slab_face_sample_set(
+                    sample_set = sampler._make_slab_face_sample_set(
                         min_max_index=idx, ctx=ctx, settings=settings
                     )
 
@@ -2075,7 +2190,7 @@ class PolySlab(base.Planar):
         paths: list[PathType],
         derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
-        """Compute vertices/sidewall-angle/slab-bounds derivatives from sample sets."""
+        """Compute geometry-parameter derivatives from sample sets."""
         vjps: AutogradFieldMap = {}
         if _TRANSLATION_PATH in paths:
             required_keys = {
@@ -2104,6 +2219,8 @@ class PolySlab(base.Planar):
                     )
             vjps[_TRANSLATION_PATH] = tuple(translation.tolist())
 
+        vertex_grad = None
+        surrogate = None
         for path in paths:
             key = self._canonical_key_for_path(path)
             if key is None:
@@ -2115,14 +2232,24 @@ class PolySlab(base.Planar):
                 )
             sample_set = sample_sets[key]
 
-            if path == ("vertices",):
-                vjps[path] = np.zeros_like(self.vertices, dtype=float)
-                for sidewall_key in (_POLYSLAB_SIDEWALL_KEY, _POLYSLAB_COPLANAR_SIDEWALL_KEY):
-                    sidewall = sample_sets.get(sidewall_key)
-                    if sidewall is not None and sidewall.num_points:
-                        vjps[path] += self._vertices_vjp_from_sample_set(
-                            sidewall, derivative_info, sidewall_key
-                        )
+            if path in (("vertices",), ("bulges",)):
+                if vertex_grad is None:
+                    surrogate = self._bulge_surrogate(
+                        derivative_info.settings, differentiate_bulges=("bulges",) in paths
+                    )
+                    sampler = self if surrogate is None else surrogate[0]
+                    vertex_grad = np.zeros_like(sampler.vertices, dtype=float)
+                    for sidewall_key in (_POLYSLAB_SIDEWALL_KEY, _POLYSLAB_COPLANAR_SIDEWALL_KEY):
+                        sidewall = sample_sets.get(sidewall_key)
+                        if sidewall is not None and sidewall.num_points:
+                            vertex_grad += sampler._vertices_vjp_from_sample_set(
+                                sidewall, derivative_info, sidewall_key
+                            )
+                vjps[path] = (
+                    vertex_grad
+                    if surrogate is None
+                    else self._bulge_pullback(path, vertex_grad, surrogate[1])
+                )
             elif path == ("sidewall_angle",):
                 if sample_set.num_points == 0:
                     vjps[path] = 0.0
@@ -2143,6 +2270,92 @@ class PolySlab(base.Planar):
                 vjps[path] = v
 
         return vjps
+
+    def _adjoint_sampling_geometry(self, settings: GeometryAdjointSettings) -> Self:
+        """Use the sampled arc polyline for adjoint Boolean containment checks."""
+        if not self._has_arc_segments:
+            return self
+        surrogate = self._bulge_surrogate(settings)
+        return self if surrogate is None else surrogate[0]
+
+    def _bulge_surrogate(
+        self, settings: GeometryAdjointSettings, *, differentiate_bulges: bool = True
+    ) -> tuple[Self, dict[str, NDArray]] | None:
+        """Straight ``PolySlab`` through points on every edge, used for adjoint sampling.
+
+        Curved edges get points at uniform arc parameters. Straight edges are
+        subdivided only for ``bulges`` derivatives, which need interior vertices
+        to capture deformation at zero bulge. The pullback is exact for the
+        polyline, which approximates arcs with relative gradient error ~1/N**2.
+        ``None`` without an explicit bulges array, for slanted or dilated slabs,
+        or when all edges are straight and no bulge derivative is requested.
+        """
+        if (
+            self.bulges is None
+            or not self._has_vertical_sidewall
+            or not math.isclose(self.dilation, 0)
+        ):
+            return None
+        bulges = np.asarray(get_static(self.bulges), dtype=float)
+        straight_edges = np.isclose(bulges, 0)
+        if not differentiate_bulges and np.all(straight_edges):
+            return None
+        vertices = np.asarray(get_static(self.vertices), dtype=float)
+        parts = []
+        for edge, (start, end, bulge) in enumerate(
+            zip(vertices, np.roll(vertices, -1, axis=0), bulges)
+        ):
+            half_chord = np.linalg.norm(end - start) / 2
+            # Keep one point for zero-length or unoptimized straight edges.
+            if half_chord == 0 or (straight_edges[edge] and not differentiate_bulges):
+                parts.append((start[None], np.zeros((1, 2)), [[-1.0, 0.0]], [edge]))
+                continue
+            angle = 4 * math.atan(abs(bulge))
+            num = max(
+                settings.polyslab_bulge_min_segments,
+                math.ceil(angle / _ARC_DISCRETIZATION_ANGULAR_STEP),
+            )
+            s = np.arange(num) / num
+            points, velocity, _, _ = _PolyBulgeUtil._arc_points_and_bulge_velocity(
+                start, end, bulge, s
+            )
+            tangent = (end - start) / (2 * half_chord)
+            local = (points - (start + end) / 2) / half_chord
+            offsets = np.stack((local @ tangent, local @ [tangent[1], -tangent[0]]), axis=1)
+            parts.append((points, velocity, offsets, np.full(num, edge)))
+        points, velocity, offsets, edges = (
+            np.concatenate([np.asarray(part[i]) for part in parts]) for i in range(4)
+        )
+        surrogate = self.updated_copy(vertices=points, bulges=None)
+        return surrogate, {
+            "velocity": velocity,
+            "offsets": offsets,
+            "edges": edges.astype(int),
+        }
+
+    def _bulge_pullback(self, path: PathType, grad: NDArray, data: dict[str, NDArray]) -> NDArray:
+        """Map surrogate vertex gradients to ``bulges`` or ``vertices`` gradients.
+
+        A surrogate point is ``mid + c_t * (end - start) / 2 + c_n * R(end - start) / 2``
+        with ``R(x, y) = (y, -x)``; ``c_t`` and ``c_n`` depend only on the bulge.
+        """
+        edges, num_vertices = data["edges"], len(get_static(self.vertices))
+        if path == ("bulges",):
+            weights = np.sum(grad * data["velocity"], axis=1)
+            return np.bincount(edges, weights=weights, minlength=num_vertices)
+        c_t, c_n = data["offsets"][:, :1], data["offsets"][:, 1:]
+        rotated = np.stack((-grad[:, 1], grad[:, 0]), axis=1)
+        to_start = 0.5 * ((1 - c_t) * grad - c_n * rotated)
+        to_end = 0.5 * ((1 + c_t) * grad + c_n * rotated)
+        ends = (edges + 1) % num_vertices
+        return np.stack(
+            [
+                np.bincount(edges, weights=to_start[:, i], minlength=num_vertices)
+                + np.bincount(ends, weights=to_end[:, i], minlength=num_vertices)
+                for i in range(2)
+            ],
+            axis=1,
+        )
 
     def _sidewall_shift(self, bound_index: int) -> float:
         """Axial sidewall shift per unit shift of ``slab_bounds[bound_index]``."""
@@ -2474,8 +2687,10 @@ class PolySlab(base.Planar):
         axis_vec[self.axis] = 1.0
 
         # densify along axis as |theta| grows, dz scales with cos(theta)
+        # Keep static geometry and clipping in double precision; only the emitted
+        # samples and frames use the gradient dtype.
         z_centers, dz, _z0, _z1 = self._z_slices(
-            sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th, dtype=_dtype
+            sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th, dtype=float
         )
 
         patches = {key: [] for key in ("centers", "Ls", "s_vals", "s_weights", "edge_indices")}
@@ -2508,8 +2723,8 @@ class PolySlab(base.Planar):
 
         # if the simulation is effectively 2D (one tangential dimension collapsed),
         # slightly expand degenerate bounds to enable finite-length clipping of edges.
-        sim_min_eff = np.array(sim_min, dtype=_dtype)
-        sim_max_eff = np.array(sim_max, dtype=_dtype)
+        sim_min_eff = np.array(sim_min, dtype=float)
+        sim_max_eff = np.array(sim_max, dtype=float)
         for dim in range(3):
             if dim == self.axis:
                 continue
@@ -2519,7 +2734,7 @@ class PolySlab(base.Planar):
 
         # pre-compute values that are constant across z slices
         n_z = len(z_centers)
-        z_centers_arr = np.asarray(z_centers, dtype=_dtype)
+        z_centers_arr = np.asarray(z_centers, dtype=float)
         d_all = -(z_centers_arr - z_ref) * tan_th  # (n_z,)
         # _shift_vertices() treats positive distances as outward offsets for CCW polygons.
         # Preserve the caller's vertex order, but flip the offset for CW inputs so the
@@ -2527,7 +2742,7 @@ class PolySlab(base.Planar):
         offset_sign = 1.0 if PolySlab._area(get_static(vertices)) > 0 else -1.0
         slice_vertices = np.asarray(
             [self._shift_vertices(vertices, offset_sign * dist)[0] for dist in d_all],
-            dtype=_dtype,
+            dtype=float,
         )
         slice_next_vertices = np.roll(slice_vertices, -1, axis=1)
 
@@ -2630,8 +2845,8 @@ class PolySlab(base.Planar):
             segment_edges = segment_next_vertices - segment_vertices
             segment_lengths = np.linalg.norm(segment_edges, axis=1)
 
-            segment_starts = np.empty((n_z, 3), dtype=_dtype)
-            segment_ends = np.empty((n_z, 3), dtype=_dtype)
+            segment_starts = np.empty((n_z, 3), dtype=float)
+            segment_ends = np.empty((n_z, 3), dtype=float)
             segment_starts[:, self.axis] = z_centers_arr
             segment_starts[:, plane_axes] = segment_vertices
             segment_ends[:, self.axis] = z_centers_arr
@@ -2933,7 +3148,9 @@ class PolySlab(base.Planar):
             return None
 
         n_seg = max(1, int(np.ceil(length / dx)))
-        coords = np.linspace(l_min, l_max, 2 * n_seg + 1, dtype=dtype)[1::2]
+        # Test inclusion before narrowing coordinates: float32 rounding can move
+        # every point off a zero-width cross-section such as x=0.37.
+        coords = np.linspace(l_min, l_max, 2 * n_seg + 1, dtype=float)[1::2]
 
         # build XY coordinates and in-plane direction vectors
         if line_dim == 0:
@@ -2951,14 +3168,14 @@ class PolySlab(base.Planar):
         dir_vec_plane = dir_vec_plane[inside]
         n_pts = len(xy)
 
-        centers_xyz = self.unpop_axis_vect(np.full(n_pts, ax_val), xy)
-        areas = np.full(n_pts, length / n_seg)  # patch length
+        centers_xyz = self.unpop_axis_vect(np.full(n_pts, ax_val, dtype=dtype), xy)
+        areas = np.full(n_pts, length / n_seg, dtype=dtype)  # patch length
 
         normals_xyz = self.unpop_axis_vect(
             np.full(n_pts, -1 if min_max_index == 0 else 1, dtype=dtype),
             np.zeros_like(xy, dtype=dtype),
         )
-        perps1_xyz = self.unpop_axis_vect(np.zeros(n_pts), dir_vec_plane)
+        perps1_xyz = self.unpop_axis_vect(np.zeros(n_pts, dtype=dtype), dir_vec_plane)
         perps2_xyz = np.cross(normals_xyz, perps1_xyz)
 
         return SurfaceSampleSet.from_arrays(
@@ -3198,7 +3415,9 @@ class PolySlab(base.Planar):
         """Return (vertices, next_v, edges, basis) arrays for sidewall edge geometry."""
         if vertices is None:
             vertices = self.vertices
-        vertices = np.asarray(vertices, dtype=dtype)
+        # Subtract static coordinates before narrowing precision: subdivided edges
+        # can be shorter than a float32 ulp at the polygon's global location.
+        vertices = np.asarray(get_static(vertices), dtype=float)
         next_v = np.roll(vertices, -1, axis=0)
         edges = next_v - vertices
         basis = self.edge_basis_vectors(edges, is_ccw=is_ccw, dtype=dtype)

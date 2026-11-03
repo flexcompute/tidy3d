@@ -19,6 +19,8 @@ from tidy3d.exceptions import AdjointError, ValidationError
 from .core import _TRANSLATION_PATH, Geometry, _raise_unsupported_traced_geometry_path
 
 if TYPE_CHECKING:
+    from typing import Self
+
     from numpy.typing import NDArray
 
     from tidy3d.components.autograd import AutogradFieldMap
@@ -290,6 +292,13 @@ class GeometryGroup(Geometry):
             _, index, *geo_path = field_path
             grouped.setdefault(index, []).append(tuple(geo_path))
         return grouped
+
+    def _adjoint_sampling_geometry(self, settings: GeometryAdjointSettings) -> Self:
+        """Use each child's sampled boundary for Boolean containment."""
+        children = tuple(child._adjoint_sampling_geometry(settings) for child in self.geometries)
+        if all(a is b for a, b in zip(children, self.geometries)):
+            return self
+        return self.updated_copy(deep=False, validate=False, geometries=children)
 
     def _make_adjoint_sample_sets(
         self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings

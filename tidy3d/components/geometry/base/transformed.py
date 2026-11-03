@@ -29,6 +29,8 @@ from .core import (
 )
 
 if TYPE_CHECKING:
+    from typing import Self
+
     from numpy.typing import NDArray
 
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
@@ -601,6 +603,13 @@ class Transformed(Geometry):
             else:
                 raise AdjointError("Transformed geometry paths must start with 'geometry'.")
         return list(dict.fromkeys(child_paths))
+
+    def _adjoint_sampling_geometry(self, settings: GeometryAdjointSettings) -> Self:
+        """Preserve the transform while using the child's sampled boundary."""
+        child = self.geometry._adjoint_sampling_geometry(settings)
+        if child is self.geometry:
+            return self
+        return self.updated_copy(deep=False, validate=False, geometry=child)
 
     def _make_adjoint_sample_sets(
         self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings

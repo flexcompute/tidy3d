@@ -18,7 +18,14 @@ from pydantic import (
     TypeAdapter,
 )
 
-from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, MatrixReal4x4, Size1D
+from tidy3d.components.types import (
+    ArrayFloat1D,
+    ArrayFloat2D,
+    ArrayLike,
+    Complex,
+    MatrixReal4x4,
+    Size1D,
+)
 from tidy3d.components.types.base import _auto_serializer, _from_complex_dict
 from tidy3d.components.types.utils import _add_schema, _typed_tuple
 
@@ -154,6 +161,7 @@ def traced_alias(base_alias: Any, *, name: str | None = None) -> TypeAlias:
 
 # "primitive" types that can use traced_alias
 TracedArrayLike = traced_alias(ArrayLike)
+TracedArrayFloat1D = traced_alias(ArrayFloat1D)
 TracedArrayFloat2D = traced_alias(ArrayFloat2D)
 TracedFloat = traced_alias(float)
 TracedPositiveFloat = traced_alias(PositiveFloat)
@@ -201,12 +209,16 @@ class GeometryAdjointSettings:
     points_per_wavelength: int
     """Surface discretization density, in sample points per material wavelength."""
 
+    polyslab_bulge_min_segments: int
+    """Minimum segments per curved edge, and per straight edge when bulge derivatives are requested."""
+
 
 __all__ = [
     "AutogradFieldMap",
     "GeometryAdjointSettings",
     "InterpolationType",
     "PathType",
+    "TracedArrayFloat1D",
     "TracedArrayFloat2D",
     "TracedArrayLike",
     "TracedComplex",

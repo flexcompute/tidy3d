@@ -213,12 +213,16 @@ Tidy3D's AD framework supports a wide range of design scenarios.
 | `Box`           | `.center`, `.size`                                         | Shape Optimization                |
 | `Sphere`        | `.center`, `.radius`                                       | Shape Optimization                |
 | `Cylinder`      | `.center`, `.radius`, `.length`, `.sidewall_angle`         | Shape Optimization                |
-| `PolySlab`      | `.vertices`, `.slab_bounds`, `.sidewall_angle`             | Shape Optimization & taper tuning |
+| `PolySlab`      | `.vertices`, `.slab_bounds`, `.sidewall_angle`, `.bulges` (arcs: vertical, undilated) | Shape Optimization & taper tuning |
 | `GeometryGroup` | `.geometries`                                              | Grouping for performance          |
 | `GeometryArray` | `.geometry.<attribute>`, `.offsets[index]`, `.transforms[index]` | Repeated geometry with differentiable placement |
 | `Transformed`   | `.geometry.<attribute>`, `.transform`                      | Differentiable affine transform of a geometry |
 | `ClipOperation` | traced parameters in underlying geometries                 | Boolean shape optimization        |
 | `TriangleMesh`  | `.mesh_dataset.surface_mesh`                               | 3D Shape Optimization             |
+
+Direct differentiation of `PolySlab.volume()` and `PolySlab.surface_area()` with
+respect to `bulges`, or `vertices` when nonzero bulges are present, is unsupported.
+Use `geometry.to_static()` for geometry queries that do not need derivatives.
 
 `GeometryArray` differentiates the shared base geometry once and accumulates the
 contribution from every placed instance. Its per-instance `offsets` are also
@@ -248,8 +252,9 @@ In 2D simulations, the axis along which the simulation has zero size must stay
 separate from the simulation plane. Rotations about that axis, in-plane reflections,
 scales and shears, independent scaling perpendicular to the plane, and translations
 are supported. Other axis-mixing transforms require a 3D simulation.
-The wrapped geometry must support adjoint differentiation; curved PolySlabs with
-nonzero bulges remain unsupported, including inside groups and boolean operations.
+The wrapped geometry must support the requested adjoint parameter. Arc-containing
+PolySlabs support their shape parameters through wrappers, but gradients of their
+placement and transform parameters remain unsupported.
 
 Surface sampling accounts for affine stretch and shear when choosing its resolution
 and clips samples to the simulation domain. In 2D, transform scaling uses the

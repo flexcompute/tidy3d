@@ -72,10 +72,14 @@ def shape_terms(
     )
     if not fields:
         return Compiled(bindings=(Binding(traced, None, vjps),))
-    clip = contains_clip_operation(structure.geometry)
+    clipping_geometry = (
+        structure.geometry._adjoint_sampling_geometry(settings)
+        if contains_clip_operation(structure.geometry)
+        else None
+    )
     kernel = BoundaryShapeKernel(
         sample_sets=tuple(
-            _shape_sample_set(entry, structure, structure_sets, clip, simulation.bounds)
+            _shape_sample_set(entry, clipping_geometry, structure_sets, simulation.bounds)
             for entry in structure_sets.entries
         ),
         point_chunks=point_chunks,
@@ -91,16 +95,16 @@ def shape_terms(
 
 
 def _shape_sample_set(
-    entry: Any, structure: Any, structure_sets: Any, clip: bool, simulation_bounds: Bound
+    entry: Any, clipping_geometry: Any, structure_sets: Any, simulation_bounds: Bound
 ) -> ShapeSampleSet:
     """What the kernel reads from one staged sample set: normals, the clip mask, PEC sampling."""
 
     sample_set = entry.sample_set
     normals, perps1, perps2 = boundary_field_frame(sample_set, simulation_bounds)
     active = None
-    if clip and sample_set.num_points:
+    if clipping_geometry is not None and sample_set.num_points:
         active = clip_active_from_inside_check(
-            clipped_geometry=structure.geometry,
+            clipped_geometry=clipping_geometry,
             material_length_scale=structure_sets.material_length_scale,
             spatial_coords=np.asarray(sample_set.points.values, dtype=float),
             normals=normals,

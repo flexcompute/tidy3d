@@ -26,6 +26,8 @@ from .geometry_group import GeometryGroup
 from .transformed import Transformed
 
 if TYPE_CHECKING:
+    from typing import Self
+
     from numpy.typing import NDArray
 
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
@@ -246,6 +248,13 @@ class GeometryArray(Geometry):
             ("geometry", "transform"),
             ("base_geometry", "transform"),
         )
+
+    def _adjoint_sampling_geometry(self, settings: GeometryAdjointSettings) -> Self:
+        """Preserve the instances while using the child's sampled boundary."""
+        child = self.geometry._adjoint_sampling_geometry(settings)
+        if child is self.geometry:
+            return self
+        return self.updated_copy(deep=False, validate=False, geometry=child)
 
     def _make_adjoint_sample_sets(
         self, paths: list[tuple[Any, ...]], ctx: Any, settings: GeometryAdjointSettings

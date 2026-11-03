@@ -594,6 +594,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             "'_update_from_bounds' is not compatible with this geometry class."
         )
 
+    def _adjoint_sampling_geometry(self, settings: GeometryAdjointSettings) -> Self:
+        """Geometry used for adjoint Boolean containment, matching its sampled boundary."""
+        return self
+
     def _make_adjoint_sample_sets(
         self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:

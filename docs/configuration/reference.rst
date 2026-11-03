@@ -200,6 +200,10 @@ grouping.
      - ``10``
      - No
      - Number of material sample points per wavelength for cylinder discretization (must be positive).
+   * - ``polyslab_bulge_min_segments``
+     - ``32``
+     - No
+     - Minimum straight segments per subdivided edge for PolySlab gradient geometry (must be ``>= 8``). Curved edges also use at least one segment per degree. Straight edges are subdivided only when bulge derivatives are requested; forward geometry remains curved. Increase to refine gradients, especially for clipped arcs.
    * - ``default_wavelength_fraction``
      - ``0.1``
      - No
@@ -299,7 +303,7 @@ grouping.
    * - ``memory_allotment_fraction``
      - ``0.75``
      - Yes
-     - Fraction of reported available RAM reserved for adjoint postprocessing when auto-selecting frequency chunk sizes and TriangleMesh surface-gradient batch sizes (between ``0`` and ``1``).
+     - Fraction of reported available RAM used as the budget for automatic batching during adjoint postprocessing (between ``0`` and ``1``).
    * - ``max_traced_structures``
      - ``500``
      - No

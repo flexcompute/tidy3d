@@ -170,6 +170,19 @@ class AdjointConfig(ConfigSection):
         ),
     )
 
+    polyslab_bulge_min_segments: int = Field(
+        default=32,
+        title="PolySlab bulge minimum segments",
+        description=(
+            "Minimum straight segments per subdivided edge when approximating PolySlabs for "
+            "autograd derivatives. Increase this to refine gradient geometry, including "
+            "clipped arcs; forward simulations retain the circular arcs. Curved edges "
+            "also use at least one segment per degree of arc. Straight edges are subdivided "
+            "only when bulge derivatives are requested. Must be at least 8."
+        ),
+        ge=8,
+    )
+
     default_wavelength_fraction: float = Field(
         default=0.1,
         title="Default wavelength fraction",
@@ -471,8 +484,8 @@ class AdjointConfig(ConfigSection):
         default=0.75,
         title="Adjoint memory allotment fraction",
         description=(
-            "Fraction of reported available RAM reserved for adjoint postprocessing when "
-            "auto-selecting frequency chunk sizes and TriangleMesh surface-gradient batch sizes."
+            "Fraction of reported available RAM used as the budget for automatic batching "
+            "during adjoint postprocessing."
         ),
         ge=0.0,
         le=1.0,
