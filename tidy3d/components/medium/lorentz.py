@@ -168,12 +168,14 @@ class Lorentz(DispersiveMedium):
                     coeffs=[
                         (1, fp, 0),
                     ],
+                    **kwargs,
                 )
             return cls(
                 eps_inf=1,
                 coeffs=[
                     ((eps_r - 1) / 2, np.sqrt(2) * freq, 0),
                 ],
+                **kwargs,
             )
         # lossy medium
         alpha = (eps_r - 1) / eps_i

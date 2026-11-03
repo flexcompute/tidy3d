@@ -91,7 +91,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
             return np.abs(field) ** 2
 
         if val == "phase":
-            return np.arctan2(np.real(field), np.imag(field))
+            return np.angle(field)
 
         raise ValueError(
             "Unknown 'val' key. Argument 'val' can take values 'real', 'imag', 'abs', "
@@ -865,9 +865,11 @@ class CustomChargePerturbation(ChargePerturbation):
         if isinstance(h_vals, UnstructuredGridDataset):
             h_vals = h_vals.values
 
-        # Needed to avoid error in some xarray / numpy versions
-        e_vals = e_vals.item() if e_vals.size == 1 else e_vals
-        h_vals = h_vals.item() if h_vals.size == 1 else h_vals
+        # Keep labeled coordinates; scalarize NumPy singleton inputs for interpolation.
+        if isinstance(e_vals, (np.ndarray, np.generic)) and e_vals.size == 1:
+            e_vals = e_vals.item()
+        if isinstance(h_vals, (np.ndarray, np.generic)) and h_vals.size == 1:
+            h_vals = h_vals.item()
 
         # note that the dimensionality of this operation differs depending on whether xarrays
         # or simple unlabeled arrays are provided:
@@ -1680,9 +1682,14 @@ class IndexPerturbation(Tidy3dBaseModel):
 
         return delta_eps, delta_sigma
 
+    @classmethod
     def from_perturbation_delta_model(cls, deltas_model: AbstractDeltaModel) -> Self:
-        """Create an IndexPerturbation from a DeltaPerturbationModel."""
-        return IndexPerturbation(delta_n=deltas_model.delta_n, delta_k=deltas_model.delta_k)
+        """Create an index perturbation from a delta model at its ``ref_freq``."""
+        return cls(
+            delta_n=deltas_model.delta_n(),
+            delta_k=deltas_model.delta_k(),
+            freq=deltas_model.ref_freq,
+        )
 
 
 PockelsTensor = array_alias(dtype=float, ndim=2, shape=(6, 3))

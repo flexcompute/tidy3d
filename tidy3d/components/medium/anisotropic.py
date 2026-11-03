@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.numerical.raw import medium as medium_numerics
 from pydantic import (
     Field,
     model_validator,
@@ -407,7 +408,11 @@ class FullyAnisotropicMedium(AbstractMedium):
         permittivity = rotation.rotate_tensor(permittivity_diag)
         conductivity = rotation.rotate_tensor(conductivity_diag)
 
-        return cls(permittivity=permittivity, conductivity=conductivity)
+        return cls(
+            permittivity=permittivity,
+            conductivity=conductivity,
+            allow_gain=any(comp.allow_gain for comp in (xx, yy, zz)),
+        )
 
     @cached_property
     def _to_diagonal(self) -> AnisotropicMedium:
@@ -420,11 +425,15 @@ class FullyAnisotropicMedium(AbstractMedium):
         """
 
         perm, cond, _ = self.eps_sigma_diag
+        # The tensor validators accept principal values a tolerance below what Medium accepts.
+        perm = np.maximum(perm, 1.0)
+        if not self.allow_gain:
+            cond = np.maximum(cond, 0.0)
 
         return AnisotropicMedium(
-            xx=Medium(permittivity=perm[0], conductivity=cond[0]),
-            yy=Medium(permittivity=perm[1], conductivity=cond[1]),
-            zz=Medium(permittivity=perm[2], conductivity=cond[2]),
+            xx=Medium(permittivity=perm[0], conductivity=cond[0], allow_gain=self.allow_gain),
+            yy=Medium(permittivity=perm[1], conductivity=cond[1], allow_gain=self.allow_gain),
+            zz=Medium(permittivity=perm[2], conductivity=cond[2], allow_gain=self.allow_gain),
         )
 
     @cached_property
@@ -433,10 +442,7 @@ class FullyAnisotropicMedium(AbstractMedium):
     ) -> tuple[tuple[float, float, float], tuple[float, float, float], TensorReal]:
         """Main components of permittivity and conductivity tensors and their directions."""
 
-        perm_diag, vecs = np.linalg.eig(self.permittivity)
-        cond_diag = np.diag(np.matmul(np.transpose(vecs), np.matmul(self.conductivity, vecs)))
-
-        return (perm_diag, cond_diag, vecs)
+        return medium_numerics.anisotropic_principal_axes(self.permittivity, self.conductivity)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:

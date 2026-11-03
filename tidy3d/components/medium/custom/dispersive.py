@@ -342,7 +342,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         :class:`.CustomPoleResidue`
             The pole residue equivalent.
         """
-        poles = [(_zeros_like(medium.conductivity), medium.conductivity / (2 * EPSILON_0))]
+        poles = []
+        if medium.conductivity is not None:
+            poles = [(_zeros_like(medium.conductivity), medium.conductivity / (2 * EPSILON_0))]
         medium_dict = medium.model_dump(
             exclude={TYPE_TAG_STR, "eps_dataset", "permittivity", "conductivity"}
         )
@@ -369,7 +371,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         sigma = res * 2 * EPSILON_0
 
         self_dict = self.model_dump(exclude={TYPE_TAG_STR, "eps_inf", "poles"})
-        self_dict.update({"permittivity": self.eps_inf, "conductivity": np.real(sigma)})
+        self_dict.update(
+            {"permittivity": self.eps_inf, "conductivity": np.real(sigma) if self.poles else None}
+        )
         return CustomMedium.model_validate(self_dict)
 
     @cached_property

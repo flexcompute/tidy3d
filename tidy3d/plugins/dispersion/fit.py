@@ -799,9 +799,7 @@ class DispersionFitter(Tidy3dBaseModel):
         :class:`DispersionFitter`
             A :class:`DispersionFitter` instance.
         """
-        if eps_imag is None:
-            n, _ = AbstractMedium.eps_complex_to_nk(eps_real + 0j)
-            return cls(wvl_um=wvl_um, n_data=n, wvl_range=wvl_range)
+        eps_imag = 0.0 if eps_imag is None else eps_imag
         n, k = AbstractMedium.eps_complex_to_nk(eps_real + eps_imag * 1j)
         return cls(wvl_um=wvl_um, n_data=n, k_data=k, wvl_range=wvl_range)
 
