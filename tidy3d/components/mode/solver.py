@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from flexcompute.core._migration.em.numerical.raw import field_data as field_data_numerics
+from flexcompute.core._migration.em.numerical.raw import mode as mode_numerics
 from numpy.typing import NDArray
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -472,6 +473,8 @@ class EigSolver(Tidy3dBaseModel):
         # We only can orthogonalize reciprocal modes in this manner.
         if is_reciprocal:
             dl_f, dl_b = dls
+            # Clip integration cells at the boundary without changing derivative/PML steps.
+            dl_dual = mode_numerics.integration_dual_steps(dl_f, dl_b)
             all_modes = list(range(num_modes))
             original_shape = E.shape
             E = E.reshape((3, Nx, Ny, num_modes))
@@ -492,7 +495,7 @@ class EigSolver(Tidy3dBaseModel):
             # The flip_mask is invariant to subsequent rescaling because power_flow
             # scales as |c|² under (E,H)→c·(E,H), preserving sign(Re P_z).
             if not is_tensorial:
-                dS = (np.outer(dl_f[0], dl_b[1]), np.outer(dl_b[0], dl_f[1]))
+                dS = (np.outer(dl_f[0], dl_dual[1]), np.outer(dl_dual[0], dl_f[1]))
                 # Move mode axis to leading so the spatial axes (Nx, Ny) are last
                 # and broadcast cleanly against dS in _complex_power_flow_numpy.
                 E_tan = (np.moveaxis(E[0], -1, 0), np.moveaxis(E[1], -1, 0))
@@ -518,11 +521,11 @@ class EigSolver(Tidy3dBaseModel):
 
             # Normalize all modes so self-dot equals 1.0 and find any self-orthogonal modes
             E, H, self_orthogonal_modes = cls._normalize_modes(
-                E, H, dl_f, dl_b, all_modes, TOL_NEEDS_ORTHOGONALIZATION
+                E, H, dl_f, dl_dual, all_modes, TOL_NEEDS_ORTHOGONALIZATION
             )
             # Identify and orthogonalize degenerate modes, excluding self-orthogonal modes
             E, H = cls._orthogonalize_degenerate_modes(
-                E, H, neff, keff, dl_f, dl_b, self_orthogonal_modes
+                E, H, neff, keff, dl_f, dl_dual, self_orthogonal_modes
             )
 
             E = E.reshape(original_shape)
