@@ -9,6 +9,7 @@ import types
 from abc import ABC
 from collections import defaultdict
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin
 
@@ -761,6 +762,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         selected_monitor_names = tuple(monitor_dicts[index]["name"] for index in selected_indices)
         lazy_state["_lazy_selected_monitor_names"] = selected_monitor_names
         lazy_state["_lazy_monitor_data"] = {}
+        # Keep only selected monitor metadata, not the full scene.
+        lazy_state["_lazy_monitor_metadata"] = {
+            monitor_dicts[index]["name"]: (index, model_dict["data"][index])
+            for index in selected_indices
+        }
         lazy_state["_lazy_monitor_data_map"] = _LazyMonitorDataMap(
             selected_monitor_names,
             lambda monitor_name: cls._lazy_proxy_load_monitor_data(lazy_state, monitor_name),
@@ -810,11 +816,14 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
 
         loaded_monitor_data = lazy_state["_lazy_monitor_data"]
         if monitor_name not in loaded_monitor_data:
-            loaded_monitor_data[monitor_name] = cls.mnt_data_from_file(
-                lazy_state["_lazy_fname"],
-                mnt_name=monitor_name,
-                **lazy_state["_lazy_parse_obj_kwargs"],
-            )
+            index, data_metadata = lazy_state["_lazy_monitor_metadata"][monitor_name]
+            with h5py.File(lazy_state["_lazy_fname"], "r") as f_handle:
+                loaded_monitor_data[monitor_name] = cls._monitor_data_from_hdf5(
+                    f_handle,
+                    index,
+                    data_metadata,
+                    **lazy_state["_lazy_parse_obj_kwargs"],
+                )
         return loaded_monitor_data[monitor_name]
 
     @classmethod
@@ -938,20 +947,43 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             monitor_list = json_dict["simulation"]["monitors"]
 
             monitor_index = cls._selected_monitor_indices(monitor_list, mnt_name)[0]
-            monitor_index_str = str(monitor_index)
-            if monitor_index_str not in f_handle["data"]:
-                raise ValueError(f"No monitor with name '{mnt_name}' found in data file.")
-
-            monitor_type_str = monitor_list[monitor_index]["type"]
-            if monitor_type_str not in DATA_TYPE_NAME_MAP:
-                raise ValueError(f"Could not find data type '{monitor_type_str}'.")
-            monitor_data_type = DATA_TYPE_NAME_MAP[monitor_type_str]
-
-            # load the monitor data from the file using the group_path
-            group_path = f"data/{monitor_index_str}"
-            return monitor_data_type.from_hdf5(
-                f_handle, group_path=group_path, **model_validate_kwargs
+            return cls._monitor_data_from_hdf5(
+                f_handle,
+                monitor_index,
+                json_dict["data"][monitor_index],
+                **model_validate_kwargs,
             )
+
+    @classmethod
+    def _monitor_data_from_hdf5(
+        cls,
+        f_handle: h5py.File,
+        monitor_index: int,
+        data_metadata: dict[str, Any],
+        *,
+        custom_decoders: list[Callable] | None = None,
+        **model_validate_kwargs: Any,
+    ) -> MonitorDataType:
+        """Load a monitor using already parsed metadata and an open file handle."""
+        if "data" not in f_handle:
+            raise ValueError(f"could not find data in the supplied file {f_handle.filename}")
+        monitor_dict = data_metadata["monitor"]
+        monitor_index_str = str(monitor_index)
+        if monitor_index_str not in f_handle["data"]:
+            raise ValueError(f"No monitor with name '{monitor_dict['name']}' found in data file.")
+        monitor_type_str = monitor_dict["type"]
+        if monitor_type_str not in DATA_TYPE_NAME_MAP:
+            raise ValueError(f"Could not find data type '{monitor_type_str}'.")
+        monitor_data_type = DATA_TYPE_NAME_MAP[monitor_type_str]
+        # Loading replaces placeholders in place. Keep the cached metadata untouched.
+        model_dict = deepcopy(data_metadata)
+        monitor_data_type._load_data_from_file(
+            fname=f_handle,
+            model_dict=model_dict,
+            group_path=f"/data/{monitor_index_str}",
+            custom_decoders=custom_decoders,
+        )
+        return monitor_data_type._validate_model_dict(model_dict, **model_validate_kwargs)
 
     @classmethod
     def from_file(
@@ -964,7 +996,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         monitor_names: str | list[str] | tuple[str, ...] | None = None,
         **parse_obj_kwargs: Any,
     ) -> Self:
-        """Load a SimulationData file, optionally materializing only selected monitors."""
+        """Load a SimulationData file, optionally materializing only selected monitors.
+
+        With ``lazy=True``, the file must remain unchanged while the lazy object is in use.
+        Create a new lazy object after modifying or replacing the file.
+        """
 
         if monitor_names is None:
             return super().from_file(

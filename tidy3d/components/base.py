@@ -1970,10 +1970,16 @@ class Tidy3dBaseModel(BaseModel):
             # for data arrays, need to be more careful as their tracers are stored in .data
             elif isinstance(x, xr.DataArray):
                 data = x.data
-                if isbox(data) or any(isbox(el) for el in np.asarray(data).ravel()):
-                    field_mapping[path] = x.data
-                elif include_untraced_data_arrays:
-                    field_mapping[path] = x.data
+                # Numeric dtypes cannot contain boxed scalar objects.
+                if (
+                    include_untraced_data_arrays
+                    or isbox(data)
+                    or (
+                        np.asarray(data).dtype.hasobject
+                        and any(isbox(el) for el in np.asarray(data).ravel())
+                    )
+                ):
+                    field_mapping[path] = data
 
             # for sequences, add (i,) to the path and handle each value individually
             elif isinstance(x, (list, tuple)):
