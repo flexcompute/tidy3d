@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import numpy as np  # noqa: F401 - used by doctest examples
+from flexcompute.data.arrays import tcad as _core
 
 from .abstract_spatial import AbstractSpatialDataArray
 from .base import DataArray
 
 
-class HeatDataArray(DataArray):
+class HeatDataArray(DataArray, _core.HeatDataArray):
     """Heat data array.
 
     Example
@@ -18,10 +19,9 @@ class HeatDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("T",)
 
 
-class ChargeDataArray(DataArray):
+class ChargeDataArray(DataArray, _core.ChargeDataArray):
     """Charge data array.
 
     Example
@@ -32,10 +32,9 @@ class ChargeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("n", "p")
 
 
-class SteadyVoltageDataArray(DataArray):
+class SteadyVoltageDataArray(DataArray, _core.SteadyVoltageDataArray):
     """Steady voltage data array. Data array used with steady state
     simulations with voltage as dimension.
 
@@ -48,10 +47,9 @@ class SteadyVoltageDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("v",)
 
 
-class FreqVoltageDataArray(DataArray):
+class FreqVoltageDataArray(DataArray, _core.FreqVoltageDataArray):
     """Frequency-domain array.
 
     Example
@@ -63,13 +61,9 @@ class FreqVoltageDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = (
-        "f",
-        "v",
-    )
 
 
-class ConvergenceHistoryDataArray(DataArray):
+class ConvergenceHistoryDataArray(DataArray, _core.ConvergenceHistoryDataArray):
     """Per-iteration residual trace across a voltage sweep and solution components.
 
     Dimensions:
@@ -100,10 +94,9 @@ class ConvergenceHistoryDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("v", "pseudo_step", "component")
 
 
-class CFLHistoryDataArray(DataArray):
+class CFLHistoryDataArray(DataArray, _core.CFLHistoryDataArray):
     """Per-iteration CFL trace across a voltage sweep.
 
     Dimensions:
@@ -143,10 +136,9 @@ class CFLHistoryDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("v", "pseudo_step")
 
 
-class SpatialVoltageDataArray(AbstractSpatialDataArray):
+class SpatialVoltageDataArray(AbstractSpatialDataArray, _core.SpatialVoltageDataArray):
     """Spatial distribution with voltage mapping.
 
     Example
@@ -160,9 +152,7 @@ class SpatialVoltageDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "voltage")
 
 
-class PerturbationCoefficientDataArray(DataArray):
+class PerturbationCoefficientDataArray(DataArray, _core.PerturbationCoefficientDataArray):
     __slots__ = ()
-    _dims = ("wvl", "coeff")

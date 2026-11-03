@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-import numpy as np
-import xarray as xr
-
-from tidy3d.constants import RADIAN
+import numpy as np  # noqa: F401 - used by doctest examples
+from flexcompute.data.arrays import spatial as _core
 
 from .abstract_spatial import AbstractSpatialDataArray
 from .base import DataArray
 
-if TYPE_CHECKING:
-    from xarray.core.types import Self
 
-
-class SpatialDataArray(AbstractSpatialDataArray):
+class SpatialDataArray(AbstractSpatialDataArray, _core.SpatialDataArray):
     """Spatial distribution.
 
     Example
@@ -31,7 +24,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
     __slots__ = ()
 
 
-class ScalarFieldDataArray(AbstractSpatialDataArray):
+class ScalarFieldDataArray(AbstractSpatialDataArray, _core.ScalarFieldDataArray):
     """Spatial distribution in the frequency-domain.
 
     Example
@@ -45,10 +38,9 @@ class ScalarFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f")
 
 
-class ScalarFieldTimeDataArray(AbstractSpatialDataArray):
+class ScalarFieldTimeDataArray(AbstractSpatialDataArray, _core.ScalarFieldTimeDataArray):
     """Spatial distribution in the time-domain.
 
     Example
@@ -62,10 +54,9 @@ class ScalarFieldTimeDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "t")
 
 
-class ScalarModeFieldDataArray(AbstractSpatialDataArray):
+class ScalarModeFieldDataArray(AbstractSpatialDataArray, _core.ScalarModeFieldDataArray):
     """Spatial distribution of a mode in frequency-domain as a function of mode index.
 
     Example
@@ -80,10 +71,11 @@ class ScalarModeFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f", "mode_index")
 
 
-class ScalarModeFieldCylindricalDataArray(AbstractSpatialDataArray):
+class ScalarModeFieldCylindricalDataArray(
+    AbstractSpatialDataArray, _core.ScalarModeFieldCylindricalDataArray
+):
     """Spatial distribution of a mode in frequency-domain as a function of mode index.
 
     Example
@@ -98,10 +90,9 @@ class ScalarModeFieldCylindricalDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("rho", "theta", "axial", "f", "mode_index")
 
 
-class ScalarTerminalFieldDataArray(AbstractSpatialDataArray):
+class ScalarTerminalFieldDataArray(AbstractSpatialDataArray, _core.ScalarTerminalFieldDataArray):
     """Spatial distribution of a terminal field in frequency-domain as a function of terminal index.
 
     Example
@@ -116,10 +107,9 @@ class ScalarTerminalFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f", "terminal_label")
 
 
-class SphericalAngleDataArray(DataArray):
+class SphericalAngleDataArray(DataArray, _core.SphericalAngleDataArray):
     """Spherical angles as indexed ``(theta, phi)`` pairs.
 
     The ``spherical_coordinate`` coordinate is ordered as ``("theta", "phi")`` and
@@ -135,52 +125,3 @@ class SphericalAngleDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "spherical_coordinate")
-    _data_attrs = {
-        "long_name": "spherical angles",
-        "units": RADIAN,
-    }
-
-    def __init__(self, data: Any, *args: Any, **kwargs: Any) -> None:
-        skip_canonicalization = kwargs.pop("_skip_bare_canonicalization", False)
-        if (
-            not skip_canonicalization
-            and not args
-            and "coords" not in kwargs
-            and "dims" not in kwargs
-        ):
-            shape = np.shape(data)
-            if (
-                len(shape) == 2
-                and shape[1] == 2
-                and not isinstance(data, xr.Variable | xr.DataArray)
-            ):
-                kwargs["dims"] = ("index", "spherical_coordinate")
-                kwargs["coords"] = {
-                    "index": np.arange(shape[0]),
-                    "spherical_coordinate": ["theta", "phi"],
-                }
-        super().__init__(data, *args, **kwargs)
-
-    @classmethod
-    def _constructor_kwargs_for_pydantic(cls) -> dict[str, Any]:
-        """Keep model parsing strict while direct user construction is ergonomic.
-
-        Direct ``SphericalAngleDataArray([[theta, phi], ...])`` construction can
-        infer the standard dimensions and coordinates. Pydantic validation of
-        model fields should not do this inference, because raw lists embedded in
-        model payloads would otherwise bypass the usual serialized DataArray
-        shape.
-        """
-        return {"_skip_bare_canonicalization": True}
-
-    @classmethod
-    def _validate_dims(cls, val: Self) -> Self:
-        """Require explicit ``(theta, phi)`` spherical coordinate ordering."""
-        val = super()._validate_dims(val)
-        spherical_coords = tuple(str(coord) for coord in val.coords["spherical_coordinate"].values)
-        if spherical_coords != ("theta", "phi"):
-            raise ValueError(
-                "SphericalAngleDataArray requires spherical_coordinate=('theta', 'phi')."
-            )
-        return val

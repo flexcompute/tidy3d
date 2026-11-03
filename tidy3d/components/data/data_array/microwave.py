@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import numpy as np  # noqa: F401 - used by doctest examples
-
-from tidy3d.constants import (
-    AMP,
-    OHM,
-    VOLT,
+from flexcompute.data.arrays import (
+    microwave as _core,
 )
 
 from .base import DataArray
@@ -25,26 +22,23 @@ from .spectral import (
 )
 
 
-class VoltageArray(DataArray):
+class VoltageArray(DataArray, _core.VoltageArray):
     # Always set __slots__ = () to avoid xarray warnings
     __slots__ = ()
-    _data_attrs = {"units": VOLT, "long_name": "voltage"}
 
 
-class CurrentArray(DataArray):
+class CurrentArray(DataArray, _core.CurrentArray):
     # Always set __slots__ = () to avoid xarray warnings
     __slots__ = ()
-    _data_attrs = {"units": AMP, "long_name": "current"}
 
 
-class ImpedanceArray(DataArray):
+class ImpedanceArray(DataArray, _core.ImpedanceArray):
     # Always set __slots__ = () to avoid xarray warnings
     __slots__ = ()
-    _data_attrs = {"units": OHM, "long_name": "impedance"}
 
 
 # Voltage arrays
-class VoltageFreqDataArray(VoltageArray, FreqDataArray):
+class VoltageFreqDataArray(VoltageArray, FreqDataArray, _core.VoltageFreqDataArray):
     """Voltage data array in frequency domain.
 
     Example
@@ -59,7 +53,7 @@ class VoltageFreqDataArray(VoltageArray, FreqDataArray):
     __slots__ = ()
 
 
-class VoltageTimeDataArray(VoltageArray, TimeDataArray):
+class VoltageTimeDataArray(VoltageArray, TimeDataArray, _core.VoltageTimeDataArray):
     """Voltage data array in time domain.
 
     Example
@@ -74,7 +68,7 @@ class VoltageTimeDataArray(VoltageArray, TimeDataArray):
     __slots__ = ()
 
 
-class VoltageFreqModeDataArray(VoltageArray, FreqModeDataArray):
+class VoltageFreqModeDataArray(VoltageArray, FreqModeDataArray, _core.VoltageFreqModeDataArray):
     """Voltage data array in frequency-mode domain.
 
     Example
@@ -90,7 +84,9 @@ class VoltageFreqModeDataArray(VoltageArray, FreqModeDataArray):
     __slots__ = ()
 
 
-class VoltageFreqTerminalDataArray(VoltageArray, FreqTerminalDataArray):
+class VoltageFreqTerminalDataArray(
+    VoltageArray, FreqTerminalDataArray, _core.VoltageFreqTerminalDataArray
+):
     """Voltage data array in frequency-terminal domain.
 
     Example
@@ -106,7 +102,9 @@ class VoltageFreqTerminalDataArray(VoltageArray, FreqTerminalDataArray):
     __slots__ = ()
 
 
-class VoltageFreqTerminalModeDataArray(VoltageArray, FreqTerminalModeDataArray):
+class VoltageFreqTerminalModeDataArray(
+    VoltageArray, FreqTerminalModeDataArray, _core.VoltageFreqTerminalModeDataArray
+):
     """Voltage transformation matrix data array from modes to terminals in frequency domain.
 
     Example
@@ -123,7 +121,9 @@ class VoltageFreqTerminalModeDataArray(VoltageArray, FreqTerminalModeDataArray):
     __slots__ = ()
 
 
-class VoltageFreqModeTerminalDataArray(VoltageArray, FreqModeTerminalDataArray):
+class VoltageFreqModeTerminalDataArray(
+    VoltageArray, FreqModeTerminalDataArray, _core.VoltageFreqModeTerminalDataArray
+):
     """Inverse voltage transformation matrix data array from terminals to modes in frequency domain.
 
     Example
@@ -141,7 +141,7 @@ class VoltageFreqModeTerminalDataArray(VoltageArray, FreqModeTerminalDataArray):
 
 
 # Current arrays
-class CurrentFreqDataArray(CurrentArray, FreqDataArray):
+class CurrentFreqDataArray(CurrentArray, FreqDataArray, _core.CurrentFreqDataArray):
     """Current data array in frequency domain.
 
     Example
@@ -156,7 +156,7 @@ class CurrentFreqDataArray(CurrentArray, FreqDataArray):
     __slots__ = ()
 
 
-class CurrentTimeDataArray(CurrentArray, TimeDataArray):
+class CurrentTimeDataArray(CurrentArray, TimeDataArray, _core.CurrentTimeDataArray):
     """Current data array in time domain.
 
     Example
@@ -171,7 +171,7 @@ class CurrentTimeDataArray(CurrentArray, TimeDataArray):
     __slots__ = ()
 
 
-class CurrentFreqModeDataArray(CurrentArray, FreqModeDataArray):
+class CurrentFreqModeDataArray(CurrentArray, FreqModeDataArray, _core.CurrentFreqModeDataArray):
     """Current data array in frequency-mode domain.
 
     Example
@@ -187,7 +187,9 @@ class CurrentFreqModeDataArray(CurrentArray, FreqModeDataArray):
     __slots__ = ()
 
 
-class CurrentFreqTerminalDataArray(CurrentArray, FreqTerminalDataArray):
+class CurrentFreqTerminalDataArray(
+    CurrentArray, FreqTerminalDataArray, _core.CurrentFreqTerminalDataArray
+):
     """Current data array in frequency-terminal domain.
     Example
     -------
@@ -202,7 +204,9 @@ class CurrentFreqTerminalDataArray(CurrentArray, FreqTerminalDataArray):
     __slots__ = ()
 
 
-class CurrentFreqTerminalModeDataArray(CurrentArray, FreqTerminalModeDataArray):
+class CurrentFreqTerminalModeDataArray(
+    CurrentArray, FreqTerminalModeDataArray, _core.CurrentFreqTerminalModeDataArray
+):
     """Current transformation matrix data array from modes to terminals in frequency domain.
 
     Example
@@ -220,7 +224,7 @@ class CurrentFreqTerminalModeDataArray(CurrentArray, FreqTerminalModeDataArray):
 
 
 # Impedance arrays
-class ImpedanceModeDataArray(ImpedanceArray, ModeDataArray):
+class ImpedanceModeDataArray(ImpedanceArray, ModeDataArray, _core.ImpedanceModeDataArray):
     """Impedance data array in mode index domain.
     Example
     -------
@@ -232,7 +236,9 @@ class ImpedanceModeDataArray(ImpedanceArray, ModeDataArray):
     __slots__ = ()
 
 
-class ImpedanceTerminalDataArray(ImpedanceArray, TerminalDataArray):
+class ImpedanceTerminalDataArray(
+    ImpedanceArray, TerminalDataArray, _core.ImpedanceTerminalDataArray
+):
     """Impedance data array in terminal index domain.
     Example
     -------
@@ -244,7 +250,7 @@ class ImpedanceTerminalDataArray(ImpedanceArray, TerminalDataArray):
     __slots__ = ()
 
 
-class ImpedanceFreqDataArray(ImpedanceArray, FreqDataArray):
+class ImpedanceFreqDataArray(ImpedanceArray, FreqDataArray, _core.ImpedanceFreqDataArray):
     """Impedance data array in frequency domain.
 
     Example
@@ -259,7 +265,7 @@ class ImpedanceFreqDataArray(ImpedanceArray, FreqDataArray):
     __slots__ = ()
 
 
-class ImpedanceTimeDataArray(ImpedanceArray, TimeDataArray):
+class ImpedanceTimeDataArray(ImpedanceArray, TimeDataArray, _core.ImpedanceTimeDataArray):
     """Impedance data array in time domain.
 
     Example
@@ -274,7 +280,9 @@ class ImpedanceTimeDataArray(ImpedanceArray, TimeDataArray):
     __slots__ = ()
 
 
-class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
+class ImpedanceFreqModeDataArray(
+    ImpedanceArray, FreqModeDataArray, _core.ImpedanceFreqModeDataArray
+):
     """Impedance data array in frequency-mode domain.
 
     Example
@@ -290,7 +298,9 @@ class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
     __slots__ = ()
 
 
-class ImpedanceFreqModeModeDataArray(ImpedanceArray, FreqModeModeDataArray):
+class ImpedanceFreqModeModeDataArray(
+    ImpedanceArray, FreqModeModeDataArray, _core.ImpedanceFreqModeModeDataArray
+):
     """Impedance matrix data array between modes in frequency domain.
 
     Example
@@ -307,7 +317,9 @@ class ImpedanceFreqModeModeDataArray(ImpedanceArray, FreqModeModeDataArray):
     __slots__ = ()
 
 
-class ImpedanceFreqTerminalTerminalDataArray(ImpedanceArray, FreqTerminalTerminalDataArray):
+class ImpedanceFreqTerminalTerminalDataArray(
+    ImpedanceArray, FreqTerminalTerminalDataArray, _core.ImpedanceFreqTerminalTerminalDataArray
+):
     """Impedance matrix data array between terminals in frequency domain.
 
     Example

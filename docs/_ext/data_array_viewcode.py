@@ -1,4 +1,4 @@
-"""Preserve Sphinx viewcode links for extracted data-array methods."""
+"""Document public array APIs backed by shared implementations."""
 
 from __future__ import annotations
 
@@ -59,4 +59,40 @@ def setup(app: Any) -> dict[str, bool]:
     """Register extracted data-array source aliases with Sphinx viewcode."""
 
     app.connect("viewcode-find-source", _find_source)
+    app.connect("config-inited", _array_members)
+    app.connect("autodoc-process-bases", _public_array_bases)
     return {"parallel_read_safe": True}
+
+
+def _array_members(_app: Any, config: Any) -> None:
+    """Expose public array members inherited from shared arrays, excluding xarray."""
+    import tidy3d
+    from tidy3d.components.data import data_array
+
+    members = {}
+    for module in (tidy3d, data_array):
+        for name, cls in vars(module).items():
+            if name.startswith("_") or not inspect.isclass(cls) or not issubclass(cls, DataArray):
+                continue
+            members[f"{module.__name__}.{name}"] = sorted(
+                {
+                    member
+                    for base in cls.__mro__
+                    if base.__module__.startswith(
+                        (_DATA_ARRAY_MODULE_PREFIX, "flexcompute.data.arrays.")
+                    )
+                    for member in vars(base)
+                    if not member.startswith("_") and member != "attrs"
+                }
+            )
+    config.autosummary_context["data_array_members"] = members
+
+
+def _public_array_bases(_app: Any, _name: str, obj: Any, _options: Any, bases: list) -> None:
+    """Show the public hierarchy without exposing shared implementation bases."""
+    import xarray as xr
+
+    if inspect.isclass(obj) and issubclass(obj, DataArray):
+        bases[:] = [base for base in bases if not base.__module__.startswith("flexcompute.data.")]
+        if obj is DataArray:
+            bases[:] = [xr.DataArray]

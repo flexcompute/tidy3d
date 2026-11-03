@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-import numpy as np
-import xarray as xr
+import numpy as np  # noqa: F401 - used by doctest examples
+from flexcompute.data.arrays import (
+    unstructured as _core,
+)
 
 from .base import DataArray
 
 
-class PointDataArray(DataArray):
+class PointDataArray(DataArray, _core.PointDataArray):
     """A two-dimensional array that stores coordinates/field components for a collection of points.
     Dimension ``index`` denotes the index of a point in the collection, and dimension ``axis``
     denotes the field component (or point coordinate) in that direction.
@@ -35,33 +35,9 @@ class PointDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "axis")
-
-    def __init__(self, data: Any, *args: Any, **kwargs: Any) -> None:
-        skip_canonicalization = kwargs.pop("_skip_bare_canonicalization", False)
-        if (
-            not skip_canonicalization
-            and not args
-            and "coords" not in kwargs
-            and "dims" not in kwargs
-        ):
-            shape = np.shape(data)
-            if (
-                len(shape) == 2
-                and shape[1] == 3
-                and not isinstance(data, xr.Variable | xr.DataArray)
-            ):
-                kwargs["dims"] = ("index", "axis")
-                kwargs["coords"] = {"index": np.arange(shape[0]), "axis": np.arange(3)}
-        super().__init__(data, *args, **kwargs)
-
-    @classmethod
-    def _constructor_kwargs_for_pydantic(cls) -> dict[str, Any]:
-        """Keep pydantic parsing strict for raw lists and arrays."""
-        return {"_skip_bare_canonicalization": True}
 
 
-class CellDataArray(DataArray):
+class CellDataArray(DataArray, _core.CellDataArray):
     """A two-dimensional array that stores indices of points composing each cell in a collection of
     cells of the same type (for example: triangles, tetrahedra, etc). Dimension ``cell_index``
     denotes the index of a cell in the collection, and dimension ``vertex_index`` denotes placement
@@ -81,18 +57,15 @@ class CellDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("cell_index", "vertex_index")
 
 
-class TriangleMeshDataArray(DataArray):
+class TriangleMeshDataArray(DataArray, _core.TriangleMeshDataArray):
     """Data of the triangles of a surface mesh as in the STL file format."""
 
     __slots__ = ()
-    _dims = ("face_index", "vertex_index", "axis")
-    _data_attrs = {"long_name": "surface mesh triangles"}
 
 
-class IndexedDataArray(DataArray):
+class IndexedDataArray(DataArray, _core.IndexedDataArray):
     """Stores a one-dimensional array enumerated by coordinate ``index``. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated data or a ``CellDataArray``
     to store cell-associated data.
@@ -105,10 +78,9 @@ class IndexedDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index",)
 
 
-class IndexedVoltageDataArray(DataArray):
+class IndexedVoltageDataArray(DataArray, _core.IndexedVoltageDataArray):
     """Stores a two-dimensional array with coordinates ``index`` and ``voltage``, where
     ``index`` is usually associated with ``PointDataArray`` and ``voltage`` indicates at what
     bias/DC-voltage the data was obtained with.
@@ -121,10 +93,9 @@ class IndexedVoltageDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "voltage")
 
 
-class IndexedTimeDataArray(DataArray):
+class IndexedTimeDataArray(DataArray, _core.IndexedTimeDataArray):
     """Stores a two-dimensional array with coordinates ``index`` and ``t``, where
     ``index`` is usually associated with ``PointDataArray`` and ``t`` indicates at what
     simulated time the data was obtained.
@@ -137,10 +108,9 @@ class IndexedTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "t")
 
 
-class IndexedFieldVoltageDataArray(DataArray):
+class IndexedFieldVoltageDataArray(DataArray, _core.IndexedFieldVoltageDataArray):
     """Stores indexed values of vector fields for different voltages. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated vector data.
     Example
@@ -151,10 +121,9 @@ class IndexedFieldVoltageDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "axis", "voltage")
 
 
-class IndexedSurfaceFreqDataArray(DataArray):
+class IndexedSurfaceFreqDataArray(DataArray, _core.IndexedSurfaceFreqDataArray):
     """Stores indexed values of scalar fields on the sides of a surface. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated scalar data.
 
@@ -166,10 +135,9 @@ class IndexedSurfaceFreqDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "side", "f")
 
 
-class IndexedSurfaceTimeDataArray(DataArray):
+class IndexedSurfaceTimeDataArray(DataArray, _core.IndexedSurfaceTimeDataArray):
     """Stores indexed values of scalar fields on the sides of a surface. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated scalar data.
 
@@ -181,10 +149,9 @@ class IndexedSurfaceTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "side", "t")
 
 
-class IndexedSurfaceFieldDataArray(DataArray):
+class IndexedSurfaceFieldDataArray(DataArray, _core.IndexedSurfaceFieldDataArray):
     """Stores indexed values of vector fields on the sides of a surface in frequency domain.
     It is typically used in conjuction with a ``PointDataArray`` to store point-associated vector data.
 
@@ -196,10 +163,9 @@ class IndexedSurfaceFieldDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "side", "axis", "f")
 
 
-class IndexedSurfaceFieldTimeDataArray(DataArray):
+class IndexedSurfaceFieldTimeDataArray(DataArray, _core.IndexedSurfaceFieldTimeDataArray):
     """Stores indexed values of vector fields on the sides of a surface in time domain.
     It is typically used in conjuction with a ``PointDataArray`` to store point-associated vector data.
 
@@ -211,10 +177,9 @@ class IndexedSurfaceFieldTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "side", "axis", "t")
 
 
-class IndexedFieldDataArray(DataArray):
+class IndexedFieldDataArray(DataArray, _core.IndexedFieldDataArray):
     """Stores indexed values of vector fields in frequency domain. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated vector data.
 
@@ -226,10 +191,9 @@ class IndexedFieldDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "axis", "f")
 
 
-class IndexedFieldTimeDataArray(DataArray):
+class IndexedFieldTimeDataArray(DataArray, _core.IndexedFieldTimeDataArray):
     """Stores indexed values of vector fields in time domain. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated vector data.
 
@@ -241,10 +205,9 @@ class IndexedFieldTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "axis", "t")
 
 
-class IndexedFreqDataArray(DataArray):
+class IndexedFreqDataArray(DataArray, _core.IndexedFreqDataArray):
     """Stores indexed values of scalar fields in frequency domain. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated vector data.
 
@@ -256,7 +219,6 @@ class IndexedFreqDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "f")
 
 
 IndexedDataArrayTypes = (

@@ -37,6 +37,7 @@ import yaml
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
 from flexcompute.core._migration.em.conversion.base import coerce_numpy_scalars
+from flexcompute.data.arrays.base import array_role
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from pydantic import (
     ValidationError as PydanticValidationError,
@@ -1871,6 +1872,10 @@ class Tidy3dBaseModel(BaseModel):
             if a is b:
                 return True
             if type(a) is not type(b):
+                if isinstance(a, xr.DataArray) and isinstance(b, xr.DataArray):
+                    # Reused public arrays and their exact core counterparts have
+                    # the same role. Do not extend this to arbitrary subclasses.
+                    return array_role(a) is array_role(b) and a.equals(b)
                 if not (isinstance(a, (list, tuple)) and isinstance(b, (list, tuple))):
                     return False
             if isinstance(a, np.ndarray):

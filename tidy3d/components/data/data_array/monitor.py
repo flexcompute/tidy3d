@@ -4,17 +4,12 @@ and diffraction."""
 from __future__ import annotations
 
 import numpy as np  # noqa: F401 - used by doctest examples
+from flexcompute.data.arrays import monitor as _core
 
-from tidy3d.constants import (
-    PICOSECOND_PER_NANOMETER_PER_KILOMETER,
-    WATT,
-)
-
-from ._constants import DIPOLE_EMISSION_INTENSITY_UNITS
 from .base import DataArray
 
 
-class FluxDataArray(DataArray):
+class FluxDataArray(DataArray, _core.FluxDataArray):
     """Flux through a surface in the frequency-domain.
 
     Example
@@ -25,11 +20,9 @@ class FluxDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f",)
-    _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
-class StructureLossDataArray(DataArray):
+class StructureLossDataArray(DataArray, _core.StructureLossDataArray):
     """Total electromagnetic power loss per structure in the frequency domain.
 
     ``structure_index`` indexes ``Simulation.structures``; ``-1`` is the background medium, and
@@ -43,11 +36,9 @@ class StructureLossDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "structure_index")
-    _data_attrs = {"units": WATT, "long_name": "power loss"}
 
 
-class StructureLossTimeDataArray(DataArray):
+class StructureLossTimeDataArray(DataArray, _core.StructureLossTimeDataArray):
     """Instantaneous electromagnetic power loss per structure in the time domain.
 
     ``structure_index`` indexes ``Simulation.structures``; ``-1`` is the background medium.
@@ -60,11 +51,9 @@ class StructureLossTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("t", "structure_index")
-    _data_attrs = {"units": WATT, "long_name": "power loss"}
 
 
-class FluxTimeDataArray(DataArray):
+class FluxTimeDataArray(DataArray, _core.FluxTimeDataArray):
     """Flux through a surface in the time-domain.
 
     Example
@@ -75,11 +64,9 @@ class FluxTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("t",)
-    _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
-class ModeAmpsDataArray(DataArray):
+class ModeAmpsDataArray(DataArray, _core.ModeAmpsDataArray):
     """Forward and backward propagating complex-valued mode amplitudes.
 
     Example
@@ -92,11 +79,9 @@ class ModeAmpsDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("direction", "f", "mode_index")
-    _data_attrs = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
 
 
-class ModeAmpsTimeDataArray(DataArray):
+class ModeAmpsTimeDataArray(DataArray, _core.ModeAmpsTimeDataArray):
     """Forward and backward propagating complex-valued mode amplitudes in the time domain.
 
     Example
@@ -109,11 +94,9 @@ class ModeAmpsTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("direction", "t", "mode_index")
-    _data_attrs = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
 
 
-class ModeIndexDataArray(DataArray):
+class ModeIndexDataArray(DataArray, _core.ModeIndexDataArray):
     """Complex-valued effective propagation index of a mode.
 
     Example
@@ -125,11 +108,9 @@ class ModeIndexDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index")
-    _data_attrs = {"long_name": "Propagation index"}
 
 
-class GroupIndexDataArray(DataArray):
+class GroupIndexDataArray(DataArray, _core.GroupIndexDataArray):
     """Group index of a mode.
 
     Example
@@ -141,11 +122,9 @@ class GroupIndexDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index")
-    _data_attrs = {"long_name": "Group index"}
 
 
-class ModeDispersionDataArray(DataArray):
+class ModeDispersionDataArray(DataArray, _core.ModeDispersionDataArray):
     """Dispersion parameter of a mode.
 
     Example
@@ -157,14 +136,9 @@ class ModeDispersionDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index")
-    _data_attrs = {
-        "long_name": "Dispersion parameter",
-        "units": PICOSECOND_PER_NANOMETER_PER_KILOMETER,
-    }
 
 
-class FieldProjectionAngleDataArray(DataArray):
+class FieldProjectionAngleDataArray(DataArray, _core.FieldProjectionAngleDataArray):
     """Far fields in frequency domain as a function of angles theta and phi.
 
     Example
@@ -179,11 +153,9 @@ class FieldProjectionAngleDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("r", "theta", "phi", "f")
-    _data_attrs = {"long_name": "radiation vectors"}
 
 
-class FieldProjectionCartesianDataArray(DataArray):
+class FieldProjectionCartesianDataArray(DataArray, _core.FieldProjectionCartesianDataArray):
     """Far fields in frequency domain as a function of local x and y coordinates.
 
     Example
@@ -198,11 +170,9 @@ class FieldProjectionCartesianDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f")
-    _data_attrs = {"long_name": "radiation vectors"}
 
 
-class FieldProjectionKSpaceDataArray(DataArray):
+class FieldProjectionKSpaceDataArray(DataArray, _core.FieldProjectionKSpaceDataArray):
     """Far fields in frequency domain as a function of normalized
     kx and ky vectors on the observation plane.
 
@@ -218,11 +188,9 @@ class FieldProjectionKSpaceDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("ux", "uy", "r", "f")
-    _data_attrs = {"long_name": "radiation vectors"}
 
 
-class DipoleEmissionDataArray(DataArray):
+class DipoleEmissionDataArray(DataArray, _core.DipoleEmissionDataArray):
     """Radiation intensity stored by a single dipole-emission monitor.
 
     Example
@@ -235,14 +203,9 @@ class DipoleEmissionDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("dipole_axis", "f")
-    _data_attrs = {
-        "long_name": "angular radiation intensity per dipole moment squared",
-        "units": DIPOLE_EMISSION_INTENSITY_UNITS,
-    }
 
 
-class DipoleEmissionPositionDataArray(DataArray):
+class DipoleEmissionPositionDataArray(DataArray, _core.DipoleEmissionPositionDataArray):
     """Position samples stored by a single dipole-emission monitor.
 
     Example
@@ -256,14 +219,9 @@ class DipoleEmissionPositionDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "dipole_axis", "f")
-    _data_attrs = {
-        "long_name": "position-resolved angular radiation intensity per dipole moment squared",
-        "units": DIPOLE_EMISSION_INTENSITY_UNITS,
-    }
 
 
-class DiffractionDataArray(DataArray):
+class DiffractionDataArray(DataArray, _core.DiffractionDataArray):
     """Diffraction power amplitudes as a function of diffraction orders and frequency.
 
     Example
@@ -277,5 +235,3 @@ class DiffractionDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("orders_x", "orders_y", "f")
-    _data_attrs = {"long_name": "diffraction amplitude"}

@@ -3,7 +3,7 @@
 {{ fullname | escape | underline}}
 
 .. autoclass:: {{ fullname }}
-   :members:
+   :members:{% if fullname in data_array_members %} {{ data_array_members[fullname] | join(", ") }}{% endif %}
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
@@ -13,7 +13,7 @@
    {% if attributes %}
    {% set ns_attrs = namespace(items=[]) %}
    {% for item in attributes %}
-   {% if item not in inherited_members
+   {% if (item not in inherited_members or item in data_array_members.get(fullname, []))
          and item != "attrs"
          and item not in ("model_config", "type")
          and not item.startswith("_") %}
@@ -35,7 +35,7 @@
    {% if methods %}
    {% set ns_methods = namespace(items=[]) %}
    {% for item in methods %}
-   {% if item not in inherited_members
+   {% if (item not in inherited_members or item in data_array_members.get(fullname, []))
          and item not in ("model_post_init",)
          and not item.startswith("_") %}
    {% set ns_methods.items = ns_methods.items + [item] %}

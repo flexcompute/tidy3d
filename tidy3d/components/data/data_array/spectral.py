@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import numpy as np  # noqa: F401 - used by doctest examples
+from flexcompute.data.arrays import (
+    spectral as _core,
+)
 
 from .base import DataArray
 
 
-class FreqDataArray(DataArray):
+class FreqDataArray(DataArray, _core.FreqDataArray):
     """Frequency-domain array.
 
     Example
@@ -17,10 +20,9 @@ class FreqDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f",)
 
 
-class ModeDataArray(DataArray):
+class ModeDataArray(DataArray, _core.ModeDataArray):
     """Mode index data array.
     Example
     -------
@@ -30,10 +32,9 @@ class ModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("mode_index",)
 
 
-class TerminalDataArray(DataArray):
+class TerminalDataArray(DataArray, _core.TerminalDataArray):
     """Terminal index data array.
     Example
     -------
@@ -43,10 +44,9 @@ class TerminalDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("terminal_label",)
 
 
-class FreqModeDataArray(DataArray):
+class FreqModeDataArray(DataArray, _core.FreqModeDataArray):
     """Array over frequency and mode index.
 
     Example
@@ -58,10 +58,9 @@ class FreqModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index")
 
 
-class FreqTerminalDataArray(DataArray):
+class FreqTerminalDataArray(DataArray, _core.FreqTerminalDataArray):
     """Array over frequency and terminal index.
 
     Example
@@ -73,10 +72,9 @@ class FreqTerminalDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "terminal_label")
 
 
-class FreqModeModeDataArray(DataArray):
+class FreqModeModeDataArray(DataArray, _core.FreqModeModeDataArray):
     """Array over frequency, mode index, and mode index.
     Example
     -------
@@ -88,10 +86,9 @@ class FreqModeModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index_out", "mode_index_in")
 
 
-class FreqTerminalModeDataArray(DataArray):
+class FreqTerminalModeDataArray(DataArray, _core.FreqTerminalModeDataArray):
     """Array over frequency, terminal index, and mode index.
 
     Example
@@ -104,10 +101,9 @@ class FreqTerminalModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "terminal_label", "mode_index")
 
 
-class FreqModeTerminalDataArray(DataArray):
+class FreqModeTerminalDataArray(DataArray, _core.FreqModeTerminalDataArray):
     """Array over frequency, mode index, and terminal index.
 
     Example
@@ -120,10 +116,9 @@ class FreqModeTerminalDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index", "terminal_label")
 
 
-class FreqTerminalTerminalDataArray(DataArray):
+class FreqTerminalTerminalDataArray(DataArray, _core.FreqTerminalTerminalDataArray):
     """Array over frequency, terminal index, and terminal index.
 
     Example
@@ -136,10 +131,9 @@ class FreqTerminalTerminalDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "terminal_label_out", "terminal_label_in")
 
 
-class TimeDataArray(DataArray):
+class TimeDataArray(DataArray, _core.TimeDataArray):
     """Time-domain array.
 
     Example
@@ -149,10 +143,9 @@ class TimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("t",)
 
 
-class MixedModeDataArray(DataArray):
+class MixedModeDataArray(DataArray, _core.MixedModeDataArray):
     """Scalar property associated with mode pairs
 
     Example
@@ -165,4 +158,3 @@ class MixedModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index_0", "mode_index_1")

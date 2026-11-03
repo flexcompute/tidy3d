@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import numpy as np  # noqa: F401 - used by doctest examples
-
-from tidy3d.constants import (
-    WATT,
-)
+from flexcompute.data.arrays import eme as _core
 
 from .abstract_spatial import AbstractSpatialDataArray
 from .base import DataArray
 
 
-class EMEScalarModeFieldDataArray(AbstractSpatialDataArray):
+class EMEScalarModeFieldDataArray(AbstractSpatialDataArray, _core.EMEScalarModeFieldDataArray):
     """Spatial distribution of a mode in frequency-domain as a function of mode index
     and EME cell index.
 
@@ -29,11 +26,9 @@ class EMEScalarModeFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f", "eme_cell_index", "mode_index")
-    _legacy_dims = ("x", "y", "z", "f", "sweep_index", "eme_cell_index", "mode_index")
 
 
-class EMEFreqModeDataArray(DataArray):
+class EMEFreqModeDataArray(DataArray, _core.EMEFreqModeDataArray):
     """Array over frequency, mode index, and EME cell index.
 
     Example
@@ -46,11 +41,9 @@ class EMEFreqModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "eme_cell_index", "mode_index")
-    _legacy_dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
 
 
-class EMEScalarFieldDataArray(AbstractSpatialDataArray):
+class EMEScalarFieldDataArray(AbstractSpatialDataArray, _core.EMEScalarFieldDataArray):
     """Spatial distribution of a field excited from an EME port in frequency-domain as a
     function of mode index at the EME port and the EME port index.
 
@@ -67,10 +60,9 @@ class EMEScalarFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f", "sweep_index", "eme_port_index", "mode_index")
 
 
-class EMECoefficientDataArray(DataArray):
+class EMECoefficientDataArray(DataArray, _core.EMECoefficientDataArray):
     """EME expansion coefficient of the mode `mode_index_out` in the EME cell
     `eme_cell_index`, when excited from mode `mode_index_in` of EME port `eme_port_index`.
 
@@ -92,18 +84,9 @@ class EMECoefficientDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = (
-        "f",
-        "sweep_index",
-        "eme_port_index",
-        "eme_cell_index",
-        "mode_index_out",
-        "mode_index_in",
-    )
-    _data_attrs = {"long_name": "mode expansion coefficient"}
 
 
-class EMESMatrixDataArray(DataArray):
+class EMESMatrixDataArray(DataArray, _core.EMESMatrixDataArray):
     """Scattering matrix elements for a fixed pair of ports, possibly with an extra
     sweep index.
 
@@ -123,11 +106,9 @@ class EMESMatrixDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "sweep_index", "mode_index_out", "mode_index_in")
-    _data_attrs = {"long_name": "scattering matrix element"}
 
 
-class EMEInterfaceSMatrixDataArray(DataArray):
+class EMEInterfaceSMatrixDataArray(DataArray, _core.EMEInterfaceSMatrixDataArray):
     """Scattering matrix elements at a single cell interface for a fixed pair of ports,
     possibly with an extra sweep index.
     Example
@@ -148,22 +129,18 @@ class EMEInterfaceSMatrixDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index_out", "mode_index_in")
-    _data_attrs = {"long_name": "scattering matrix element"}
 
 
-class EMEOverlapDataArray(DataArray):
+class EMEOverlapDataArray(DataArray, _core.EMEOverlapDataArray):
     """Overlap matrix between EME modes in one cell or across one cell interface."""
 
     __slots__ = ()
     # Intentionally no ``_legacy_dims``: released overlap blocks retain the historical
     # EMEInterfaceSMatrixDataArray type and normalize through EMEOverlapDataset. No
     # released HDF5 file dispatches a legacy block directly to this replacement class.
-    _dims = ("f", "eme_cell_index", "mode_index_out", "mode_index_in")
-    _data_attrs = {"long_name": "mode overlap"}
 
 
-class EMEModeIndexDataArray(DataArray):
+class EMEModeIndexDataArray(DataArray, _core.EMEModeIndexDataArray):
     """Complex-valued effective propagation index of an EME mode,
     also indexed by EME cell.
 
@@ -177,12 +154,9 @@ class EMEModeIndexDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "eme_cell_index", "mode_index")
-    _legacy_dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
-    _data_attrs = {"long_name": "Propagation index"}
 
 
-class EMEFluxDataArray(DataArray):
+class EMEFluxDataArray(DataArray, _core.EMEFluxDataArray):
     """Power flux of an EME mode, also indexed by EME cell.
 
     Example
@@ -195,33 +169,24 @@ class EMEFluxDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "eme_cell_index", "mode_index")
-    _legacy_dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
-    _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
-class EMETraceMetricDataArray(DataArray):
+class EMETraceMetricDataArray(DataArray, _core.EMETraceMetricDataArray):
     """Field-metric matrix used by advanced EME interface diagnostics."""
 
     __slots__ = ()
-    _dims = ("f", "sweep_index", "trace_index_out", "trace_index_in")
-    _data_attrs = {"long_name": "interface trace metric"}
 
 
-class EMEInterfaceCellIndexDataArray(DataArray):
+class EMEInterfaceCellIndexDataArray(DataArray, _core.EMEInterfaceCellIndexDataArray):
     """Left or right EME cell index for each aggregated EME interface."""
 
     __slots__ = ()
-    _dims = ("eme_interface_index",)
-    _data_attrs = {"long_name": "EME interface cell index"}
 
 
-class EMEInterfaceDiagnosticDataArray(DataArray):
+class EMEInterfaceDiagnosticDataArray(DataArray, _core.EMEInterfaceDiagnosticDataArray):
     """Scalar EME interface diagnostic value.
 
     Indexed by interface, incident port, and incident mode.
     """
 
     __slots__ = ()
-    _dims = ("f", "sweep_index", "eme_interface_index", "eme_port_index", "mode_index")
-    _data_attrs = {"long_name": "interface diagnostic"}
