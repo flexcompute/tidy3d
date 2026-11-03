@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, overload
 import autograd.numpy as anp
 import numpy as np
 import xarray as xr
+from flexcompute.core._migration.em.numerical.raw import spatial as filter_numerics
 
 from tidy3d.exceptions import Tidy3dError, format_chained_exception_message
 
@@ -19,44 +20,6 @@ if TYPE_CHECKING:
 
 P = ParamSpec("P")
 R = TypeVar("R")
-
-
-def _kernel_circular(size: Iterable[int]) -> NDArray:
-    """Create a circular kernel in n dimensions.
-
-    Parameters
-    ----------
-    size : Iterable[int]
-        The size of the circular kernel in pixels for each dimension.
-
-    Returns
-    -------
-    NDArray
-        An n-dimensional array representing the circular kernel.
-    """
-    grids = np.ogrid[tuple(slice(-1, 1, 1j * s) for s in size)]
-    squared_distances = sum(grid**2 for grid in grids)
-    kernel = np.array(squared_distances <= 1, dtype=np.float64)
-    return kernel
-
-
-def _kernel_conic(size: Iterable[int]) -> NDArray:
-    """Create a conic kernel in n dimensions.
-
-    Parameters
-    ----------
-    size : Iterable[int]
-        The size of the conic kernel in pixels for each dimension.
-
-    Returns
-    -------
-    NDArray
-        An n-dimensional array representing the conic kernel.
-    """
-    grids = np.ogrid[tuple(slice(-1, 1, 1j * s) for s in size)]
-    dists = sum(grid**2 for grid in grids)
-    kernel = np.maximum(0, 1 - np.sqrt(dists))
-    return kernel
 
 
 def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = True) -> NDArray:
@@ -76,20 +39,7 @@ def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = 
     NDArray
         An n-dimensional array representing the specified type of kernel.
     """
-    if not all(np.issubdtype(type(dim), int) and dim > 0 for dim in size):
-        raise ValueError("'size' must be an iterable of positive integers.")
-
-    if kernel_type == "circular":
-        kernel = _kernel_circular(size)
-    elif kernel_type == "conic":
-        kernel = _kernel_conic(size)
-    else:
-        raise ValueError(f"Unsupported kernel type: {kernel_type}")
-
-    if normalize:
-        kernel /= np.sum(kernel)
-
-    return kernel
+    return filter_numerics.make_kernel(kernel_type, size, normalize=normalize)
 
 
 def get_kernel_size_px(

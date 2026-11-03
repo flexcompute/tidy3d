@@ -5,6 +5,7 @@ from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
+from flexcompute.core._migration.em.numerical.raw.spatial import squeezed_kernel_size
 from pydantic import Field, PositiveInt
 
 import tidy3d as td
@@ -109,9 +110,7 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
         """
         original_shape = array.shape
         squeezed_array = np.squeeze(array)
-        size_px = tuple(np.atleast_1d(self.kernel_size))
-        if len(size_px) != squeezed_array.ndim:
-            size_px *= squeezed_array.ndim
+        size_px = squeezed_kernel_size(self.kernel_size, original_shape)
         filtered_array = self._apply_filter(squeezed_array, size_px)
         return np.reshape(filtered_array, original_shape)
 

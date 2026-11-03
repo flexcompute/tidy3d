@@ -6,12 +6,12 @@ import autograd.numpy as np
 import numpy as onp
 from autograd import jacobian
 from autograd.extend import defvjp, primitive
-from autograd.numpy.fft import fftn, ifftn
 from autograd.scipy.special import logsumexp
 from autograd.tracer import getval
-from numpy.fft import irfftn, rfftn
+from flexcompute.core._migration.em.numerical.raw.spatial import (
+    fft_convolve as _fft_convolve_general,
+)
 from numpy.lib.stride_tricks import sliding_window_view
-from scipy.fft import next_fast_len
 
 from tidy3d.components.autograd.functions import add_at, interpn, trapz
 from tidy3d.exceptions import format_chained_exception_message
@@ -97,92 +97,6 @@ def _normalize_axes(
         raise ValueError("Convolution axes must be unique for both the array and the kernel.")
 
     return axes_array, axes_kernel
-
-
-def _fft_convolve_general(
-    array: NDArray,
-    kernel: NDArray,
-    axes_array: tuple[int, ...],
-    axes_kernel: tuple[int, ...],
-    mode: Literal["full", "valid"],
-) -> NDArray:
-    """Perform convolution using FFT along the specified axes."""
-
-    num_conv_axes = len(axes_array)
-
-    if num_conv_axes == 0:
-        array_shape = array.shape
-        kernel_shape = kernel.shape
-        result = np.multiply(
-            array.reshape(array_shape + (1,) * kernel.ndim),
-            kernel.reshape((1,) * array.ndim + kernel_shape),
-        )
-        return result.reshape(array_shape + kernel_shape)
-
-    ignore_axes_array = tuple(ax for ax in range(array.ndim) if ax not in axes_array)
-    ignore_axes_kernel = tuple(ax for ax in range(kernel.ndim) if ax not in axes_kernel)
-
-    new_order_array = ignore_axes_array + axes_array
-    new_order_kernel = ignore_axes_kernel + axes_kernel
-
-    array_reordered = np.transpose(array, new_order_array) if array.ndim else array
-    kernel_reordered = np.transpose(kernel, new_order_kernel) if kernel.ndim else kernel
-
-    num_batch_array = len(ignore_axes_array)
-    num_batch_kernel = len(ignore_axes_kernel)
-
-    array_conv_shape = array_reordered.shape[num_batch_array:]
-    kernel_conv_shape = kernel_reordered.shape[num_batch_kernel:]
-
-    if any(d <= 0 for d in array_conv_shape + kernel_conv_shape):
-        raise ValueError("Convolution dimensions must be positive; got zero-length axis.")
-
-    fft_axes = tuple(range(-num_conv_axes, 0))
-    fft_shape = [next_fast_len(n + k - 1) for n, k in zip(array_conv_shape, kernel_conv_shape)]
-    use_real_fft = fft_shape[-1] % 2 == 0  # only applicable in this case
-
-    fft_fun = rfftn if use_real_fft else fftn
-    array_fft = fft_fun(array_reordered, fft_shape, axes=fft_axes)
-    kernel_fft = fft_fun(kernel_reordered, fft_shape, axes=fft_axes)
-
-    if num_batch_kernel:
-        array_batch_shape = array_fft.shape[:num_batch_array]
-        conv_shape = array_fft.shape[num_batch_array:]
-        array_fft = np.reshape(
-            array_fft,
-            array_batch_shape + (1,) * num_batch_kernel + conv_shape,
-        )
-
-    if num_batch_array:
-        kernel_batch_shape = kernel_fft.shape[:num_batch_kernel]
-        conv_shape = kernel_fft.shape[num_batch_kernel:]
-        kernel_fft = np.reshape(
-            kernel_fft,
-            (1,) * num_batch_array + kernel_batch_shape + conv_shape,
-        )
-    use_real_fft = fft_shape[-1] % 2 == 0
-
-    product = array_fft * kernel_fft
-
-    ifft_fun = irfftn if use_real_fft else ifftn
-    full_result = ifft_fun(product, fft_shape, axes=fft_axes)
-
-    if mode == "full":
-        result = full_result
-    elif mode == "valid":
-        valid_slices = [slice(None)] * full_result.ndim
-        for axis_offset, (array_dim, kernel_dim) in enumerate(
-            zip(array_conv_shape, kernel_conv_shape)
-        ):
-            start = int(min(array_dim, kernel_dim) - 1)
-            length = int(abs(array_dim - kernel_dim) + 1)
-            axis = full_result.ndim - num_conv_axes + axis_offset
-            valid_slices[axis] = slice(start, start + length)
-        result = full_result[tuple(valid_slices)]
-    else:
-        raise ValueError(f"Unsupported convolution mode '{mode}'.")
-
-    return np.real(result)
 
 
 def _get_pad_indices(

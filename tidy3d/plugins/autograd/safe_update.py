@@ -163,6 +163,7 @@ def _coordinate_candidate(accepted: Params, proposed: Params, index: int, scale:
             accepted_value,
             dtype=np.result_type(accepted_value, new, np.float64),
             copy=True,
+            order="C",
         )
         candidate_values = candidate.reshape(-1)
         proposed_values = np.asarray(new).reshape(-1)
@@ -201,6 +202,7 @@ def _prefix_candidate(accepted: Params, proposed: Params, indices: np.ndarray) -
             accepted_value,
             dtype=np.result_type(accepted_value, new, np.float64),
             copy=True,
+            order="C",
         )
         candidate.reshape(-1)[leaf_indices] = np.asarray(new).reshape(-1)[leaf_indices]
         return float(candidate) if np.ndim(accepted_value) == 0 else candidate

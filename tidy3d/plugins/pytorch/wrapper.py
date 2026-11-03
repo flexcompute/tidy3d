@@ -95,10 +95,10 @@ def to_torch(fun: Callable[..., Any]) -> Callable[..., torch.Tensor]:
         ) -> tuple[torch.Tensor | None, ...]:
             typed_ctx = cast(_AutogradFunctionContext, ctx)
             numpy_grad_output = grad_output.detach().cpu().numpy()
-            _grads = typed_ctx.vjp(numpy_grad_output)
+            _grads = typed_ctx.vjp(numpy_grad_output.conj())
             grads = [None] * typed_ctx.num_args
             for idx, grad in zip(typed_ctx.grad_argnums, _grads):
-                grads[idx] = torch.as_tensor(grad, device=typed_ctx.device)
+                grads[idx] = torch.as_tensor(grad.conj().copy(), device=typed_ctx.device)
             return tuple(grads)
 
     def apply(*args: Any, **kwargs: Any) -> torch.Tensor:

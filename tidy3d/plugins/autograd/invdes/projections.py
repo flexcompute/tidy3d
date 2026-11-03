@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import autograd.numpy as np
 from flexcompute.core._migration.em.numerical.raw import projections as projection_numerics
 
 from tidy3d.plugins.autograd.constants import BETA_DEFAULT, ETA_DEFAULT
@@ -36,17 +35,7 @@ def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> 
     np.ndarray
         The array after applying the ramp projection.
     """
-    ll = array <= (center - width / 2)
-    cc = (array > (center - width / 2)) & (array < (center + width / 2))
-    rr = array >= (center + width / 2)
-
-    return np.concatenate(
-        [
-            np.zeros(array[ll].size),
-            (array[cc] - (center - width / 2)) / width,
-            np.ones(array[rr].size),
-        ]
-    )
+    return projection_numerics.ramp_projection(array, width=width, center=center)
 
 
 def tanh_projection(
