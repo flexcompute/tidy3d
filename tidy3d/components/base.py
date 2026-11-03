@@ -36,6 +36,7 @@ import xarray as xr
 import yaml
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
+from flexcompute.core._migration.em.conversion.base import coerce_numpy_scalars
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from pydantic import (
     ValidationError as PydanticValidationError,
@@ -262,21 +263,6 @@ def _get_valid_extension(fname: PathLike) -> str:
 
 
 T = TypeVar("T", bound="Tidy3dBaseModel")
-
-
-def field_allows_scalar(field: FieldInfo) -> bool:
-    annotation = field.annotation
-
-    def allows_scalar(a: Any) -> bool:
-        origin = get_origin(a)
-        if origin in (Union, UnionType):
-            args = (arg for arg in get_args(a) if arg is not type(None))
-            return any(allows_scalar(arg) for arg in args)
-        if origin is not None:
-            return False
-        return isinstance(a, type) and issubclass(a, (float, int, np.generic))
-
-    return allows_scalar(annotation)
 
 
 def annotation_allows_none(annotation: Any) -> bool:
@@ -664,22 +650,8 @@ class Tidy3dBaseModel(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def coerce_numpy_scalars_for_model(cls, data: Any) -> Any:
-        """
-        coerce numpy scalars / size-1 arrays to native Python
-        scalars, but only for fields whose annotations allow scalars.
-        """
-        if not isinstance(data, dict):
-            return data
-
-        for name, field in cls.model_fields.items():
-            if name not in data or not field_allows_scalar(field):
-                continue
-
-            v = data[name]
-            if isinstance(v, np.generic) or (isinstance(v, np.ndarray) and v.size == 1):
-                data[name] = v.item()
-
-        return data
+        """Convert NumPy scalar inputs while preserving array fields."""
+        return coerce_numpy_scalars(data, cls.model_fields)
 
     @classmethod
     def _get_type_value(cls, obj: dict[str, Any]) -> str:

@@ -48,6 +48,9 @@ def _adapt(payload: Any, adapters: Mapping[str, Adapter]) -> Any:
     ``attrs`` holds user metadata, so a ``type`` key inside it is not a type tag.
     """
 
+    # Translators pass a fresh dump; an empty map needs neither a walk nor a copy.
+    if not adapters:
+        return payload
     if isinstance(payload, dict):
         payload = {
             key: value if key == "attrs" else _adapt(value, adapters)
