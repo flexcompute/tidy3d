@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from tidy3d.components.data.structure_loss import _loses_power_at_surface
 from tidy3d.components.geometry.base.geometry_group import GeometryGroup
 from tidy3d.config import config
 from tidy3d.constants import fp_eps
@@ -57,6 +58,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.material.types import StructureMediumType
     from tidy3d.components.simulation import Simulation
     from tidy3d.components.structure import Structure
     from tidy3d.em.translate.sample_sets import SurfaceSampleSet
@@ -75,6 +77,12 @@ _BOUNDARY_PROBE_FRACTION = 0.5
 _VOTE_BLOCK = 16384
 # nearest surface samples (within reach) that vote on the side of a point, see ``_SurfaceVote``
 _VOTE_NEIGHBORS = 8
+
+# PEC surface sample spacing as a fraction of the finest local grid step: the collar
+# attributes cell faces to the nearest sample and the side-snapped boundary sampling reads
+# the nearest Yee node, so denser samples re-read the same nodes. Half a step gave the same
+# gradients as one step on the PEC suite (box, sheet, polyslab, holes) with 3-4x the data
+PEC_SAMPLE_SPACING_CELLS = 1.0
 _E_COMPONENT_KEYS = ("Ex", "Ey", "Ez")
 _H_COMPONENT_KEYS = ("Hx", "Hy", "Hz")
 
@@ -113,6 +121,45 @@ def _clamp_to_bounds(points: np.ndarray, simulation: Simulation) -> np.ndarray:
     return np.clip(points, sim_min + inset, sim_max - inset)
 
 
+def is_pec_surface(medium: StructureMediumType, simulation: Simulation) -> bool:
+    """Whether the simulation solves ``medium`` as a PEC-like surface: a PEC, or a
+    non-penetrable ``LossyMetalMedium`` under the surface impedance subpixel method. Under any
+    other lossy-metal method the solver treats the metal as a regular conductor, so its shape
+    gradient is the dielectric one."""
+    return _loses_power_at_surface(medium, simulation)
+
+
+def _precedence_order(simulation: Simulation) -> list[int]:
+    """Structure indices from lowest to highest precedence: by priority, then list order,
+    as the simulation resolves overlaps."""
+    mode = simulation.structure_priority_mode
+    structures = simulation.structures
+    return sorted(range(len(structures)), key=lambda i: structures[i]._priority(mode))
+
+
+def sheet_opened_at(
+    points: np.ndarray, axis: int, half: np.ndarray, sheet_index: int, simulation: Simulation
+) -> np.ndarray:
+    """Whether a structure of higher precedence than the zero-thickness PEC sheet
+    ``simulation.structures[sheet_index]`` replaces it at ``points`` on its plane with a
+    non-PEC medium.
+
+    The structure must hold both sides of the sheet, ``half`` away along ``axis``, as an
+    opening cut through the sheet does; one resting on the sheet holds one side only and
+    leaves the sheet in place.
+    """
+    order = _precedence_order(simulation)
+    below, above = points.copy(), points.copy()
+    below[:, axis] -= half
+    above[:, axis] += half
+    opened = np.zeros(points.shape[0], dtype=bool)
+    for index in order[order.index(sheet_index) + 1 :]:
+        cover = simulation.structures[index]
+        holds = cover.geometry.inside(*below.T) & cover.geometry.inside(*above.T)
+        opened[holds] = not is_pec_surface(cover.medium, simulation)
+    return opened
+
+
 def _pec_trigger_is_unconditional(structure: Structure, simulation: Simulation) -> bool:
     """PEC triggers that keep the payload even when every sampled mask is zero.
 
@@ -121,11 +168,13 @@ def _pec_trigger_is_unconditional(structure: Structure, simulation: Simulation) 
     (the hint exists precisely for exactly-touching ambiguity that node-sampled masks
     can miss), so their payload is never pruned.
     """
-    if structure.medium.is_pec:
+    if is_pec_surface(structure.medium, simulation):
         return True
-    if structure.background_medium is not None and structure.background_medium.is_pec:
+    if structure.background_medium is not None and is_pec_surface(
+        structure.background_medium, simulation
+    ):
         return True
-    return simulation.medium.is_pec
+    return is_pec_surface(simulation.medium, simulation)
 
 
 def _overlapping_structures(structure: Structure, scan_index: SamplingScanIndex) -> list[Structure]:
@@ -139,7 +188,9 @@ def _overlapping_structures(structure: Structure, scan_index: SamplingScanIndex)
     ]
 
 
-def _pec_trigger_from_neighbors(structure: Structure, scan_index: SamplingScanIndex) -> bool:
+def _pec_trigger_from_neighbors(
+    structure: Structure, simulation: Simulation, scan_index: SamplingScanIndex
+) -> bool:
     """Whether any PEC structure's bounding box overlaps this structure's.
 
     A cheap prefilter rather than exact geometry intersection: over-inclusion here is
@@ -148,7 +199,8 @@ def _pec_trigger_from_neighbors(structure: Structure, scan_index: SamplingScanIn
     never extra recorded data.
     """
     return any(
-        candidate.medium.is_pec for candidate in _overlapping_structures(structure, scan_index)
+        is_pec_surface(candidate.medium, simulation)
+        for candidate in _overlapping_structures(structure, scan_index)
     )
 
 
@@ -182,7 +234,8 @@ def _metal_like_trigger(
     Same over-inclusive candidate set as the PEC and anisotropy triggers. A medium
     whose real permittivity at the adjoint frequencies falls below
     ``config.adjoint.pec_detection_threshold`` behaves PEC-like at the boundary,
-    but only declared ``is_pec`` media receive PEC handling — so a hit here (on a
+    but only media solved as a PEC-like surface (see :func:`is_pec_surface`) receive PEC
+    handling — so a hit here (on a
     structure with no PEC payload staged) surfaces the dielectric-only-approximation
     warning at collection, matching the legacy consumption-time warning.
     """
@@ -193,7 +246,7 @@ def _metal_like_trigger(
     freqs = np.asarray(frequencies)
     threshold = config.adjoint.pec_detection_threshold
     for medium in media:
-        if medium.is_pec:
+        if is_pec_surface(medium, simulation):
             continue
         if np.min(np.asarray(medium.eps_model(freqs)).real) < threshold:
             return True
@@ -211,7 +264,7 @@ def effective_is_pec_at_points(
     containing a point decides its medium, falling back to the simulation medium.
     Returns a float array (``1.0`` where PEC) matching the legacy detection's dtype.
     """
-    mask = np.full(points.shape[0], float(simulation.medium.is_pec))
+    mask = np.full(points.shape[0], float(is_pec_surface(simulation.medium, simulation)))
     points_min, points_max = points.min(axis=0), points.max(axis=0)
     for candidate, cand_min, cand_max in zip(
         scan_index.structures, scan_index.bounds_min, scan_index.bounds_max
@@ -233,7 +286,7 @@ def effective_is_pec_at_points(
             candidate_points[:, 0], candidate_points[:, 1], candidate_points[:, 2]
         )
         if np.any(inside):
-            mask[candidate_indices[inside]] = float(candidate.medium.is_pec)
+            mask[candidate_indices[inside]] = float(is_pec_surface(candidate.medium, simulation))
     return mask
 
 
@@ -550,7 +603,9 @@ def stage_sample_sets(
     """
     snapping_fraction = config.adjoint.boundary_snapping_fraction
     pec_unconditional = _pec_trigger_is_unconditional(structure, simulation)
-    pec_triggered = pec_unconditional or _pec_trigger_from_neighbors(structure, scan_index)
+    pec_triggered = pec_unconditional or _pec_trigger_from_neighbors(
+        structure, simulation, scan_index
+    )
     containment = _Containment(structure.geometry)
 
     staged = {}
@@ -611,3 +666,36 @@ def stage_sample_sets(
                 for key, sample_set in staged.items()
             }
     return staged
+
+
+def pec_sample_spacing(grid: Grid, bounds: tuple, spacing: float) -> float:
+    """Surface sample spacing for a PEC structure: the finest local grid step.
+
+    The adaptive (material-derived) ``spacing`` collapses to its floor for bulk PEC, orders
+    of magnitude below the grid, where sampling denser than the grid only multiplies the
+    staged point-cloud data; but its material scan misses a zero-thickness PEC sheet and
+    keeps a vacuum spacing of a tenth of a wavelength there, leaving a polygon sheet's
+    edges a few samples each. The grid sets the spacing either way; ``spacing`` is only
+    the fallback when no grid cell touches ``bounds``.
+    """
+    finest = min(
+        (
+            float(np.min(widths[touching]))
+            for widths, touching in grid_widths_near(grid, bounds)
+            if np.any(touching)
+        ),
+        default=None,
+    )
+    return spacing if finest is None else PEC_SAMPLE_SPACING_CELLS * finest
+
+
+def grid_widths_near(grid: Grid, bounds: tuple) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Per axis, the grid's cell widths and which cells overlap ``bounds`` or neighbor it."""
+    bounds_min, bounds_max = (np.asarray(b, dtype=float) for b in bounds)
+    near = []
+    for axis, dim in enumerate("xyz"):
+        centers = np.asarray(getattr(grid.centers, dim), dtype=float)
+        widths = np.asarray(getattr(grid.sizes, dim), dtype=float)
+        touching = (centers + widths >= bounds_min[axis]) & (centers - widths <= bounds_max[axis])
+        near.append((widths, touching))
+    return near

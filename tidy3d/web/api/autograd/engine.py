@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from flexcompute.core._migration.em.derivatives import BoundaryShapeKernel, write_program
+from flexcompute.core._migration.em.derivatives import (
+    BoundaryShapeKernel,
+    CollarKernel,
+    write_program,
+)
 
 import tidy3d as td
 from tidy3d.components.autograd.field_map import TracerKeys
@@ -36,38 +40,58 @@ def _validate_program_size(num_bytes: float, program: DerivativeProgram) -> None
     """Reject an oversized derivative program before upload.
 
     Client preflight of the backend limit (``MAX_ADJOINT_SAMPLE_SETS_SIZE_GB``), with guidance
-    in public vocabulary. The program carries every surface sample point, which dominates its
-    size.
+    in public vocabulary. The program carries every surface sample point, and for a PEC
+    surface the collar cells around it, which dominate its size.
     """
     max_bytes = simulation_constants.MAX_ADJOINT_SAMPLE_SETS_SIZE_GB * 1e9
     if num_bytes <= max_bytes:
         return
 
-    points = sorted(
-        (
-            (sum(len(s.normals) for s in kernel.sample_sets), key[1])
-            for key, kernel in program.terms
-            if isinstance(kernel, BoundaryShapeKernel)
-        ),
+    # per structure: surface samples, and collar cells (with their samples) for PEC surfaces
+    samples: dict[int, int] = {}
+    cells: dict[int, int] = {}
+    for key, kernel in program.terms:
+        index = key[1]
+        if isinstance(kernel, BoundaryShapeKernel):
+            samples[index] = samples.get(index, 0) + sum(len(s.normals) for s in kernel.sample_sets)
+        elif isinstance(kernel, CollarKernel):
+            samples[index] = samples.get(index, 0) + sum(len(s.points) for s in kernel.sample_sets)
+            cells[index] = cells.get(index, 0) + len(kernel.cell_centers)
+    totals = sorted(
+        ((samples.get(i, 0) + cells.get(i, 0), i) for i in samples.keys() | cells.keys()),
         reverse=True,
     )
-    largest = ", ".join(f"structure {index} ({count:,} points)" for count, index in points[:3])
-    # surface point count scales with 1 / spacing**2
-    spacing_factor = float(np.sqrt(num_bytes / max_bytes))
+    largest = ", ".join(
+        f"structure {i} ({samples.get(i, 0):,} surface samples"
+        + (f", {cells[i]:,} collar cells)" if i in cells else ")")
+        for _, i in totals[:3]
+    )
+    # point counts scale with 1 / spacing**2 (or 1 / grid step**2 for metals)
+    factor = float(np.sqrt(num_bytes / max_bytes))
+    advice = []
+    if cells:
+        advice.append(
+            "PEC and other metal surfaces are sampled at the local grid step and wrapped in a "
+            "collar of grid cells a few cells deep, so their size grows with the traced metal "
+            "surface area divided by the square of the grid step: coarsen the grid near the "
+            f"traced metal by at least ~{factor:.1f}x, or trace fewer metal structures."
+        )
+    if any(index not in cells for index in samples):
+        advice.append(
+            "Dielectric surfaces are sampled every 'config.adjoint.default_wavelength_fraction' "
+            "times the shortest material length scale (bounded below by "
+            "'config.adjoint.minimum_spacing_fraction' times the shortest adjoint wavelength "
+            "and by the local grid step), so their size grows with the traced surface area "
+            f"divided by the square of that spacing: coarsen it by at least ~{factor:.1f}x by "
+            "raising 'config.adjoint.default_wavelength_fraction'."
+        )
     raise AdjointError(
-        f"The adjoint surface sample sets for this simulation are {num_bytes / 1e9:.2f} GB, "
-        f"above the {max_bytes / 1e9:.1f} GB limit for server-side gradients. Largest "
-        f"contributors: {largest}. Shape gradients record fields at every surface sample "
-        "point, so the size grows with the traced surface area divided by the square of the "
-        f"sampling spacing: coarsen the spacing by at least ~{spacing_factor:.1f}x. The "
-        "spacing is 'config.adjoint.default_wavelength_fraction' times the shortest material "
-        "length scale, bounded below by 'config.adjoint.minimum_spacing_fraction' times the "
-        "shortest adjoint wavelength and by the local grid step. For PEC and other metals the "
-        "material length scale is negligible, so raise "
-        "'config.adjoint.minimum_spacing_fraction' (or coarsen the grid near the traced "
-        "surfaces); for dielectrics raise 'config.adjoint.default_wavelength_fraction'. "
-        "Tracing only the surfaces that need gradients (keeping large static parts untraced) "
-        "also reduces the size."
+        f"The derivative program for this simulation is {num_bytes / 1e9:.2f} GB, above the "
+        f"{max_bytes / 1e9:.1f} GB limit for server-side gradients. Largest contributors: "
+        f"{largest}. "
+        + " ".join(advice)
+        + " Tracing only the surfaces that need gradients (keeping large static parts "
+        "untraced) also reduces the size."
     )
 
 

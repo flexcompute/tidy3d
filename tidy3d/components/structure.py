@@ -825,6 +825,37 @@ class Structure(AbstractStructure):
         )
         return monitors_fld, monitors_eps, point_chunks
 
+    def _make_adjoint_collar_monitors(
+        self, freqs: list[float], index: int | str, structure_sets: StructureSampleSets
+    ) -> list[PointCloudFieldMonitor]:
+        """``E`` and ``H`` monitors at the collar (exterior stress sleeve) cell centers.
+
+        They record consecutive cells, chunked on the collar's own point count like the
+        surface point clouds; the permittivity comes from the simulation definition instead.
+        """
+        from tidy3d.components.autograd import point_consumption
+
+        points = np.asarray(structure_sets.collar.points.values, dtype=float)
+        return [
+            PointCloudFieldMonitor(
+                points=PointDataArray(
+                    points[start:stop],
+                    coords={"index": np.arange(stop - start), "axis": np.arange(3)},
+                ),
+                fields=("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"),
+                freqs=freqs,
+                name=adjoint_monitor_name(
+                    index=index,
+                    monitor_tag=point_consumption.adjoint_point_cloud_chunk_tag(
+                        "fld_pc_col", chunk_index
+                    ),
+                ),
+            )
+            for chunk_index, (start, stop) in enumerate(
+                point_consumption.adjoint_point_cloud_chunk_bounds(points.shape[0])
+            )
+        ]
+
     def _custom_vjp_derivatives(
         self,
         derivative_info: DerivativeInfo,

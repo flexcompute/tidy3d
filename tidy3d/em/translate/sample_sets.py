@@ -24,6 +24,7 @@ from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_set
     CircularCrossSectionSidewallAngleMetadata,
     CircularCrossSectionSidewallMetadata,
     CircularCrossSectionSlabFaceMetadata,
+    CollarSamplingData,
     GeometrySampleSets,  # noqa: TC — runtime re-export consumed across the client package
     MaterialQueryPoints,
     PECSamplingData,
@@ -45,7 +46,7 @@ from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_set
     circular_cross_section_metadata as _schema_circular_cross_section_metadata,
 )
 from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
-    sample_set_integrand as _schema_sample_set_integrand,
+    sample_set_forces as _schema_sample_set_forces,
 )
 from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
     typed_sample_set_metadata as _schema_typed_sample_set_metadata,
@@ -57,7 +58,7 @@ from flexcompute.core._migration.em.schema.tidy3d.components.data.data_array imp
 )
 
 # The schema package has its own exception hierarchy (an M0 copy); contract functions
-# like its sample_set_integrand raise ITS AdjointError, which client code
+# like its sample_set_forces raise ITS AdjointError, which client code
 # cannot catch as tidy3d.exceptions.AdjointError. The schema exception stays private
 # to this module: the boundary functions below translate it, so client code only
 # ever sees tidy3d exceptions.
@@ -84,6 +85,7 @@ __all__ = [
     "CircularCrossSectionSidewallAngleMetadata",
     "CircularCrossSectionSidewallMetadata",
     "CircularCrossSectionSlabFaceMetadata",
+    "CollarSamplingData",
     "GeometrySampleSets",
     "IndexedDataArray",
     "MaterialQueryPoints",
@@ -102,23 +104,28 @@ __all__ = [
     "TriangleMeshSurfaceMetadata",
     "circular_cross_section_metadata",
     "encode_traced_keys",
-    "sample_set_integrand",
+    "sample_set_forces",
     "shape_paths_by_structure",
     "typed_sample_set_metadata",
 ]
 
 
-def sample_set_integrand(
-    derivative_info: ShapeDerivativeContext, key: PathType, sample_slice: slice | None = None
+def sample_set_forces(
+    derivative_info: ShapeDerivativeContext,
+    key: PathType,
+    sample_slice: slice | None = None,
+    expansion_rate: float = 0.0,
 ) -> np.ndarray:
-    """Per-point shape-gradient integrand for one sample set at this boundary.
+    """Per-sample shape-derivative force vectors ``(N, 3)`` for one sample set at this boundary.
 
-    Delegates to the schema consumption seam (the point-integrand lookup) and translates the
+    Delegates to the schema consumption seam (the point-force lookup) and translates the
     schema package's ``AdjointError`` into ``tidy3d.exceptions.AdjointError``, so public-side
     consumption raises only tidy3d exceptions.
     """
     try:
-        return _schema_sample_set_integrand(derivative_info, key, sample_slice=sample_slice)
+        return _schema_sample_set_forces(
+            derivative_info, key, sample_slice=sample_slice, expansion_rate=expansion_rate
+        )
     except _SchemaAdjointError as exc:
         raise AdjointError(str(exc)) from exc
 

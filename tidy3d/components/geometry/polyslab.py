@@ -2117,6 +2117,12 @@ class PolySlab(base.Planar):
             path_by_key[(_POLYSLAB_SLAB_FACE, 1)] = _TRANSLATION_PATH
         for path in paths:
             key = self._canonical_key_for_path(path)
+            if key == _POLYSLAB_SIDEWALL_ANGLE_KEY and not is_2d:
+                # the angle reads the sidewall set's forces: one set per wall, so a PEC collar
+                # does not split its traction, and a slice through the slab axis shares the
+                # sidewall's planar sampling
+                path_by_key.setdefault(_POLYSLAB_SIDEWALL_KEY, path)
+                continue
             if key is not None:
                 path_by_key[key] = path
             if key is not None and key[0] == _POLYSLAB_SLAB_FACE and self._sidewall_shift(key[1]):
@@ -2157,12 +2163,7 @@ class PolySlab(base.Planar):
                 continue
             elif key == _POLYSLAB_SIDEWALL_ANGLE_KEY:
                 # 2D sim => no dependence on theta (z_local=0)
-                if is_2d:
-                    sample_set = None
-                else:
-                    sample_set = self._make_sidewall_angle_sample_set(
-                        sim_min=sim_min, sim_max=sim_max, dx=ctx.spacing, settings=settings
-                    )
+                sample_set = None
             else:  # slab face
                 idx = key[1]
                 face_coord = self.slab_bounds[idx]
@@ -2211,12 +2212,7 @@ class PolySlab(base.Planar):
             for key in required_keys | {_POLYSLAB_COPLANAR_SIDEWALL_KEY}:
                 sample_set = sample_sets.get(key)
                 if sample_set is not None and sample_set.num_points:
-                    integrand = self._sample_set_integrand(derivative_info, key)
-                    translation += np.sum(
-                        (sample_set.weights.values * np.real(integrand))[:, None]
-                        * sample_set.normals.values,
-                        axis=0,
-                    )
+                    translation += np.sum(self._sample_set_forces(derivative_info, key), axis=0)
             vjps[_TRANSLATION_PATH] = tuple(translation.tolist())
 
         vertex_grad = None
@@ -2225,6 +2221,8 @@ class PolySlab(base.Planar):
             key = self._canonical_key_for_path(path)
             if key is None:
                 continue
+            if key == _POLYSLAB_SIDEWALL_ANGLE_KEY and key not in sample_sets:
+                key = _POLYSLAB_SIDEWALL_KEY  # staged without its own set
             if key not in sample_sets:
                 raise AdjointError(
                     f"'PolySlab' sample sets are missing the canonical {key} key needed for "
@@ -2251,19 +2249,23 @@ class PolySlab(base.Planar):
                     else self._bulge_pullback(path, vertex_grad, surrogate[1])
                 )
             elif path == ("sidewall_angle",):
-                if sample_set.num_points == 0:
-                    vjps[path] = 0.0
-                    continue
-                g = self._sample_set_integrand(derivative_info, key)
-                vjps[path] = float(np.real(np.sum(g * sample_set.weights.values)))
+                angle_keys = (key,)
+                if key == _POLYSLAB_SIDEWALL_KEY:
+                    angle_keys = (key, _POLYSLAB_COPLANAR_SIDEWALL_KEY)
+                v = 0.0
+                for angle_key in angle_keys:
+                    angle_set = sample_sets.get(angle_key)
+                    if angle_set is not None and angle_set.num_points:
+                        forces = self._sample_set_forces(derivative_info, angle_key)
+                        velocity = self._sidewall_angle_velocity(angle_set)
+                        v += float(np.sum(np.einsum("ij,ij->i", forces, velocity)))
+                vjps[path] = v
             else:  # slab_bounds
+                # raising either slab bound moves its face along +axis
                 v = 0.0
                 if sample_set.num_points > 0:
-                    g = self._sample_set_integrand(derivative_info, key)
-                    v = np.real(np.sum(g * sample_set.weights.values)).item()
-                    # outward-normal convention
-                    if path[1] == 0:
-                        v *= -1
+                    forces = self._sample_set_forces(derivative_info, key)
+                    v = float(np.sum(forces[:, self.axis]))
                 shift = self._sidewall_shift(path[1])
                 if shift:
                     v += shift * self._sidewall_axial_vjp(sample_sets, derivative_info)
@@ -2368,7 +2370,7 @@ class PolySlab(base.Planar):
         sample_sets: dict[PathType, SurfaceSampleSet],
         derivative_info: ShapeDerivativeContext,
     ) -> float:
-        """VJP of a rigid axial translation of the sidewalls (normal velocity ``n_axis``)."""
+        """VJP of a rigid axial translation of the sidewalls (velocity along the slab axis)."""
         if _POLYSLAB_SIDEWALL_KEY not in sample_sets:
             raise AdjointError(
                 f"'PolySlab' sample sets are missing the canonical {_POLYSLAB_SIDEWALL_KEY} key "
@@ -2378,9 +2380,8 @@ class PolySlab(base.Planar):
         sample_set = sample_sets[_POLYSLAB_SIDEWALL_KEY]
         if sample_set.num_points == 0:
             return 0.0
-        g = self._sample_set_integrand(derivative_info, _POLYSLAB_SIDEWALL_KEY)
-        normal_axis = sample_set.normals.values[:, self.axis]
-        return np.real(np.sum(g * sample_set.weights.values * normal_axis)).item()
+        forces = self._sample_set_forces(derivative_info, _POLYSLAB_SIDEWALL_KEY)
+        return float(np.sum(forces[:, self.axis]))
 
     def _vertices_vjp_from_sample_set(
         self,
@@ -2396,40 +2397,32 @@ class PolySlab(base.Planar):
 
         metadata = typed_sample_set_metadata(sample_set, PolySlabSidewallMetadata, "PolySlab")
 
-        # evaluate integrand
-        g = self._sample_set_integrand(derivative_info, key)
+        # per-sample force vectors, in-plane components
+        forces = self._sample_set_forces(derivative_info, key)
+        forces_2d = np.delete(forces, self.axis, axis=1)
 
-        # weights are the patch areas; compute weighted vjps
-        patch_vjps = (g * sample_set.weights.values).real
-
-        # distribute to vertices using vectorized accumulation
-        vertices, _, _, basis = self._edge_geometry_arrays(
-            vertices=self._vertex_gradient_reference_polygon,
-            dtype=derivative_info.settings.gradient_dtype_float,
-        )
-        normals_2d = np.delete(basis["norm"], self.axis, axis=1)
+        # a vertex displacement moves the adjacent sidewall patches horizontally with the
+        # hat-function velocity (1 - s) at the edge start and s at its end; contract each
+        # patch force with those velocities and scatter to the two vertices
         edge_idx = np.asarray(metadata.edge_indices.values).astype(int)
         s = np.asarray(metadata.s_vals.values)
-        edge_norms = normals_2d[edge_idx]
 
         # Accumulate per-vertex contributions using bincount (O(N_patches))
-        num_vertices = vertices.shape[0]
+        num_vertices = len(self.vertices)
         idx0 = edge_idx
         idx1 = (edge_idx + 1) % num_vertices
 
         def scatter(patch_forces: NDArray) -> NDArray:
-            """Scatter forces from each sampled cross-section to its vertices."""
-            w0 = (1.0 - s) * patch_forces
-            w1 = s * patch_forces
-            contrib0 = w0[:, None] * edge_norms
-            contrib1 = w1[:, None] * edge_norms
+            """Scatter in-plane patch forces ``(N, 2)`` to the vertices of their edges."""
+            contrib0 = (1.0 - s)[:, None] * patch_forces
+            contrib1 = s[:, None] * patch_forces
             v0x = np.bincount(idx0, weights=contrib0[:, 0], minlength=num_vertices)
             v0y = np.bincount(idx0, weights=contrib0[:, 1], minlength=num_vertices)
             v1x = np.bincount(idx1, weights=contrib1[:, 0], minlength=num_vertices)
             v1y = np.bincount(idx1, weights=contrib1[:, 1], minlength=num_vertices)
             return np.stack((v0x + v1x, v0y + v1y), axis=1)
 
-        vjp_per_vertex = scatter(patch_vjps)
+        vjp_per_vertex = scatter(forces_2d)
         if not math.isclose(self.dilation, 0) or not self._has_vertical_sidewall:
             offsets = self.dilation - (
                 sample_set.points.values[:, self.axis] - self.reference_axis_pos
@@ -2441,8 +2434,25 @@ class PolySlab(base.Planar):
             shift_vjp, _ = make_vjp(lambda v: self._shift_vertices(v, offset_sign)[0] - v)(
                 np.array(self.vertices)
             )
-            vjp_per_vertex += shift_vjp(scatter(patch_vjps * offsets))
+            vjp_per_vertex += shift_vjp(scatter(forces_2d * offsets[:, None]))
         return vjp_per_vertex
+
+    def _sidewall_angle_velocity(self, sample_set: SurfaceSampleSet) -> NDArray:
+        """Surface velocity vectors ``(N, 3)`` of the sidewall for a unit change of angle.
+
+        The cross-section at height ``z`` is the reference polygon offset by
+        ``d(z) = -(z - z_ref) tan(theta)``, so the sidewall moves horizontally along the
+        in-plane outward normal at the rate ``dd/dtheta = -(z - z_ref) sec(theta)^2``.
+        """
+        points = np.asarray(sample_set.points.values)
+        normals = np.asarray(sample_set.normals.values)
+        in_plane = normals.copy()
+        in_plane[:, self.axis] = 0.0
+        in_plane = self.normalize_vect(in_plane)
+        cos_theta = np.cos(get_static(self.sidewall_angle))
+        z_local = points[:, self.axis] - self.reference_axis_pos
+        rate = -z_local / (cos_theta * cos_theta)
+        return rate[:, None] * in_plane
 
     # ---- Shared helpers for VJP surface integrations ----
     def _z_slices(
@@ -2985,72 +2995,6 @@ class PolySlab(base.Planar):
             np.clip(s, 0.0, 1.0).astype(dtype, copy=False),
             weights,
             length,
-        )
-
-    def _make_sidewall_angle_sample_set(
-        self,
-        sim_min: NDArray,
-        sim_max: NDArray,
-        dx: float,
-        settings: GeometryAdjointSettings,
-    ) -> SurfaceSampleSet | None:
-        """Sidewall sample set weighted for dJ/dtheta where theta = sidewall_angle.
-
-        dJ/dtheta = integral_S g(x) * V_n(x; theta) * dA, with g(x) evaluated at
-        consumption time. For a ruled sidewall built by offsetting the mid-plane
-        polygon by d(z) = -(z - z_ref) * tan(theta), the normal velocity is
-        V_n = (dd/dtheta) * cos(theta) = -(z - z_ref)/cos(theta) and the area element
-        is dA = (dz/cos(theta)) * d_ell. Therefore each patch weight is
-        w = L * dz * (-(z - z_ref)) / cos(theta)^2, fully precomputed here.
-        """
-        from tidy3d.em.translate.sample_sets import (
-            PolySlabSidewallAngleMetadata,
-            SurfaceSampleSet,
-        )
-
-        # The scalar sidewall-angle VJP should not depend on the user's input winding.
-        # Use the canonical reference polygon; vertex VJPs keep the raw ordering.
-        vertices, next_v, edges, basis = self._edge_geometry_arrays(
-            dtype=settings.gradient_dtype_float,
-            vertices=self.reference_polygon,
-            is_ccw=True,
-        )
-
-        # collect patches once
-        patch = self._collect_sidewall_patches(
-            vertices=vertices,
-            next_v=next_v,
-            edges=edges,
-            basis=basis,
-            sim_min=sim_min,
-            sim_max=sim_max,
-            is_2d=False,
-            dx=dx,
-            settings=settings,
-        )
-        if patch["centers"].shape[0] == 0:
-            return None
-
-        # Shape-derivative factors:
-        # - Offset: d(z) = -(z - z_ref) * tan(theta)
-        # - Tangential rate: dd/dtheta = -(z - z_ref) * sec(theta)^2
-        # - Normal velocity (project to surface normal): V_n = (dd/dtheta) * cos(theta) = -(z - z_ref)/cos(theta)
-        # - Area element of slanted strip: dA = (dz/cos(theta)) * d_ell
-        # => Patch weight scales as: V_n * dA = -(z - z_ref) * dz * d_ell / cos(theta)^2
-        cos_theta = np.cos(get_static(self.sidewall_angle))
-        inv_cos2 = 1.0 / (cos_theta * cos_theta)
-        z_ref = self.reference_axis_pos
-
-        z_local = patch["zc_vals"] - z_ref
-        weights = patch["Ls"] * patch["s_weights"] * patch["dz"] * (-z_local) * inv_cos2
-        return SurfaceSampleSet.from_arrays(
-            points=patch["centers"],
-            normals=patch["normals"],
-            perps1=patch["perps1"],
-            perps2=patch["perps2"],
-            weights=weights,
-            pec_flat_perp_dims=(False, False),
-            metadata=PolySlabSidewallAngleMetadata(),
         )
 
     def _make_slab_face_sample_set(

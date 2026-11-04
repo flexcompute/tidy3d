@@ -249,21 +249,40 @@ def _affine_transform_vjp(
     Each column is a translation VJP weighted by the local homogeneous point.
     Reuse the geometry consumer's slice-motion and composite chain rules instead
     of assuming that its sample normals contain every displacement sensitivity.
-    Samples and integrands are local; boolean masks are already in the integrands.
+    Samples and forces are local; boolean masks are already in the forces.
     The consumer selects its translation partition, ignoring other parameter sets.
+    A column's velocity ``e_i x_c`` keeps growing off the surface like ``x_c + d o_c``,
+    so collar forces take their distance moments with the local offset ``o`` of a step
+    along the world normal, as a radius does (``F x_c + M o_c``). Per local normal
+    distance ``o = G^-1 n / (n . G^-1 n)`` with ``G = A^T A``: the normal ``n`` itself for
+    rotations and uniform scale, with a tangential part under shear or anisotropic scale.
     """
+    inverse = np.linalg.inv(np.asarray(transform)[:3, :3])
+    inverse_metric = inverse @ inverse.T
+
+    def weighted(key: PathType, sample_set: SurfaceSampleSet, column: int) -> np.ndarray:
+        forces = Geometry._sample_set_forces(derivative_info, key)
+        if column == 3:
+            return forces
+        local = forces * sample_set.points.values[:, column, None]
+        moments = derivative_info.point_force_moments.get(key)
+        if moments is not None:
+            normals = sample_set.normals.values
+            offsets = normals @ inverse_metric
+            offsets = offsets / np.sum(offsets * normals, axis=1, keepdims=True)
+            local = local + moments * offsets[:, column, None]
+        return local
+
     gradient = np.zeros((4, 4))
     for column in range(4):
         weighted_info = replace(
             derivative_info,
-            point_integrands={
-                key: (
-                    Geometry._sample_set_integrand(derivative_info, key)
-                    * (sample_set.points.values[:, column] if column < 3 else 1.0)
-                )[:, None]
+            point_forces={
+                key: weighted(key, sample_set, column)
                 for key, sample_set in sample_sets.items()
                 if sample_set.num_points
             },
+            point_force_moments={},
         )
         translations = geometry._compute_derivatives_from_sample_sets(
             sample_sets=sample_sets, paths=[_TRANSLATION_PATH], derivative_info=weighted_info
@@ -645,17 +664,35 @@ class Transformed(Geometry):
             for key, sample_set in sample_sets.items()
             if key[:1] == ("geometry",)
         }
-        local_point_integrands = {
-            key[1:]: value
-            for key, value in derivative_info.point_integrands.items()
-            if key[:1] == ("geometry",)
-        }
+        linear = np.asarray(self.transform)[:3, :3]
+
+        def localized(
+            values: dict[PathType, np.ndarray], distances: bool = False
+        ) -> dict[PathType, np.ndarray]:
+            # a local point velocity v maps to the world velocity A v, so the force that
+            # contracts with it is A^T F (rows: F @ A); with the localized weights and
+            # normals this is the same pullback as the scalar w Re(g) V.n. A moment also
+            # weights by the distance off the surface, measured in world space, while the
+            # child's extension rate is per local distance: along the normal a world distance
+            # d is a local distance d / |A^T n| (the transform gradient adds the offset's
+            # tangential part).
+            local = {}
+            for key, value in values.items():
+                if key[:1] != ("geometry",):
+                    continue
+                local[key[1:]] = np.asarray(value) @ linear
+                if distances:
+                    normals = np.asarray(sample_sets[key].normals.values) @ linear
+                    local[key[1:]] = local[key[1:]] / np.linalg.norm(normals, axis=1, keepdims=True)
+            return local
+
         local_info = replace(
             derivative_info,
             simulation_bounds=_transformed_simulation_bounds(
                 self.transform, derivative_info.simulation_bounds
             ),
-            point_integrands=local_point_integrands,
+            point_forces=localized(derivative_info.point_forces),
+            point_force_moments=localized(derivative_info.point_force_moments, distances=True),
         )
         result = {}
         if ("transform",) in paths:
@@ -671,7 +708,6 @@ class Transformed(Geometry):
                 paths=child_paths,
                 derivative_info=local_info,
             )
-            linear = np.asarray(self.transform)[:3, :3]
             inverse_transpose = np.linalg.inv(linear).T
             for path in geometry_paths:
                 child_path = path if path == _TRANSLATION_PATH else path[1:]

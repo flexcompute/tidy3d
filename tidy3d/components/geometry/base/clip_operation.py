@@ -447,11 +447,16 @@ class ClipOperation(Geometry):
 
             geometry_info = replace(
                 derivative_info,
-                # point-cloud integrands are keyed like sample sets: strip the routing
-                # prefix so the operand's local canonical keys resolve
-                point_integrands={
+                # point forces are keyed like sample sets: strip the routing prefix so
+                # the operand's local canonical keys resolve
+                point_forces={
                     key[1:]: value
-                    for key, value in derivative_info.point_integrands.items()
+                    for key, value in derivative_info.point_forces.items()
+                    if key[:1] == prefix
+                },
+                point_force_moments={
+                    key[1:]: value
+                    for key, value in derivative_info.point_force_moments.items()
                     if key[:1] == prefix
                 },
             )

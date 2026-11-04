@@ -26,8 +26,9 @@ PathType = tuple[str | int, ...]
 
 @dataclass(frozen=True)
 class Binding:
-    """The chain rule from one term's outputs to some traced paths; ``term=None`` is a zero.
+    """The chain rule from some terms' outputs to some traced paths; no ``terms`` is a zero.
 
+    The terms' outputs reach ``reduce`` as one mapping, so their output keys must differ.
     ``reduce(outputs, frequencies)`` takes the outputs and the frequencies they cover (all the
     program frequencies, or one frequency batch's) and returns each of ``paths``' VJP. One call
     fills them all, so a chain rule shared by several paths runs once. A returned VJP may share
@@ -35,14 +36,15 @@ class Binding:
     """
 
     paths: tuple[PathType, ...]
-    term: Key | None
+    terms: tuple[Key, ...]
     reduce: Callable[[Mapping[Key, np.ndarray], np.ndarray], Mapping[PathType, Any]]
 
     @classmethod
     def one(cls, path: PathType, term: Key | None, reduce: Callable) -> Binding:
         """A binding of one path, whose ``reduce`` returns that path's VJP."""
 
-        return cls((path,), term, partial(_one_path, path=path, reduce=reduce))
+        terms = () if term is None else (term,)
+        return cls((path,), terms, partial(_one_path, path=path, reduce=reduce))
 
 
 def _one_path(
@@ -65,8 +67,13 @@ class ShapeDerivativeContext:
     """What a geometry's chain rule reads besides its sample sets; it holds no field data."""
 
     simulation_bounds: tuple[tuple[float, float, float], tuple[float, float, float]]
-    point_integrands: dict[PathType, np.ndarray]
-    """Each sample set's per-point sensitivity, ``(N, 1)``, under the set's canonical key."""
+    point_forces: dict[PathType, np.ndarray]
+    """Each sample set's per-sample force vectors ``F_p``, ``(N, 3)``, under the set's canonical
+    key: ``dJ/dk = sum_p v_{p,k} . F_p`` for a parameter with surface velocity ``v_{p,k}``."""
+    point_force_moments: dict[PathType, np.ndarray]
+    """First distance moments of collar forces, ``(N, 3)``, for the sets that have them; a
+    parameter whose velocity grows like ``(1 + kappa d)`` off the surface takes
+    ``F_p + kappa M_p``."""
     resolved_material_wavelength: float
     """The material wavelength the sample sets were generated with."""
     settings: GeometryAdjointSettings

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from itertools import chain
 from math import isclose
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
@@ -509,12 +510,17 @@ class Sphere(base.Centered, base.Circular):
         if sample_set.num_points == 0:
             return _zero_vjps(paths)
 
-        g = self._sample_set_integrand(derivative_info, _SPHERE_SURFACE_KEY)
-
+        # velocities: center_i -> e_i everywhere (rigid); radius -> the outward normal, a
+        # dilation whose collar extension keeps growing like |x|/R
+        forces = self._sample_set_forces(derivative_info, _SPHERE_SURFACE_KEY)
+        forces_dilation = self._sample_set_forces(
+            derivative_info,
+            _SPHERE_SURFACE_KEY,
+            expansion_rate=1.0 / float(get_static(self.radius)),
+        )
         normals_sel = sample_set.normals.values
-        weighted = (sample_set.weights.values * g).real
-        grad_center = np.sum(weighted[:, None] * normals_sel, axis=0)
-        grad_radius = np.sum(weighted)
+        grad_center = np.sum(forces, axis=0)
+        grad_radius = np.sum(np.einsum("ij,ij->i", forces_dilation, normals_sel))
 
         vjps: AutogradFieldMap = {}
         if _TRANSLATION_PATH in paths:
@@ -953,6 +959,25 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         vjps_polyslab = polyslab._compute_derivatives_from_sample_sets(
             sample_sets=sample_sets, paths=list(ps_paths), derivative_info=derivative_info
         )
+        # the radius is a dilation of the cross section: its collar velocity keeps growing
+        # like rho/R away from the sidewall, so the vertex forces that map onto the radius
+        # are re-evaluated with that expansion (translations keep the rigid forces above)
+        vjps_dilation = vjps_polyslab
+        if ("radius",) in paths and derivative_info.point_force_moments:
+            expansion_rate = 1.0 / float(get_static(self.radius))
+            moments = derivative_info.point_force_moments
+            vjps_dilation = polyslab._compute_derivatives_from_sample_sets(
+                sample_sets=sample_sets,
+                paths=[("vertices",)],
+                derivative_info=replace(
+                    derivative_info,
+                    point_forces={
+                        key: forces + expansion_rate * moments[key] if key in moments else forces
+                        for key, forces in derivative_info.point_forces.items()
+                    },
+                    point_force_moments={},
+                ),
+            )
 
         vjps = {}
         if _TRANSLATION_PATH in paths:
@@ -967,10 +992,10 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             elif path == ("radius",):
                 # transform polyslab vertices derivatives into radius derivative
                 xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
-                if ("vertices",) not in vjps_polyslab:
+                if ("vertices",) not in vjps_dilation:
                     vjps[path] = 0.0
                 else:
-                    vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
+                    vjps_vertices_xs, vjps_vertices_ys = vjps_dilation[("vertices",)].T
                     vjp_xs = np.sum(xs_ * vjps_vertices_xs)
                     vjp_ys = np.sum(ys_ * vjps_vertices_ys)
                     vjps[path] = vjp_xs + vjp_ys

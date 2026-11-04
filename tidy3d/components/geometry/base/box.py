@@ -10,7 +10,7 @@ import shapely
 from pydantic import Field
 
 from tidy3d._optional_imports import verify_packages_import
-from tidy3d.components.autograd import TracedSize
+from tidy3d.components.autograd import TracedSize, get_static
 from tidy3d.components.autograd.path_utils import (
     indexed_traced_paths,
     traced_paths,
@@ -771,47 +771,23 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    @staticmethod
-    def _derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
-        """Derivatives with respect to the ``center`` and ``size`` fields in the ``Box``."""
-
-        vjps_faces_min, vjps_faces_max = np.array(vjps_faces)
-
-        # post-process min and max face gradients into center and size
-        vjp_center = vjps_faces_max - vjps_faces_min
-        vjp_size = (vjps_faces_min + vjps_faces_max) / 2.0
-
-        return {
-            "center": tuple(vjp_center.tolist()),
-            "size": tuple(vjp_size.tolist()),
-        }
-
-    @staticmethod
-    def _face_axes_for_paths(paths: list[PathType]) -> tuple[int, ...]:
-        """Face-normal axes implied by the requested derivative paths.
-
-        All axes unless every requested path names a specific axis (robust to mixed
-        indexed/unindexed path lists from grouped router dispatch). Shared by
-        generation and consumption so the implied canonical keys cannot disagree.
-        """
-        if all(len(path) > 1 for path in paths):
-            return tuple(sorted({path[1] for path in paths}))
-        return (0, 1, 2)
-
     def _make_adjoint_sample_sets(
         self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate face sample sets under canonical ``("faces", min_max_index, axis)`` keys.
 
-        Every implied face key is emitted; a face outside the simulation domain or
-        collapsed by clipping carries an explicit empty set (zero gradient). The face
-        sets serve both the ``center`` and ``size`` derivative paths.
+        All six faces are sampled whatever subset of paths is traced: every face is a
+        closest-point target of the collar (exterior stress sleeve) and carries tangential
+        surface velocity for the size and center parameters of the other axes. A face
+        outside the simulation domain or collapsed by clipping carries an explicit empty
+        set (zero gradient). The face sets serve both the ``center`` and ``size``
+        derivative paths.
         """
         from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
         sample_sets = {}
         for min_max_index in (0, 1):
-            for axis_normal in self._face_axes_for_paths(paths):
+            for axis_normal in range(3):
                 sample_set = self._make_face_sample_set(
                     min_max_index=min_max_index,
                     axis_normal=axis_normal,
@@ -829,27 +805,49 @@ class Box(SimplePlaneIntersection, Centered):
         paths: list[PathType],
         derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
-        """Compute ``center``/``size`` derivatives from pre-generated face sample sets."""
-        # gradients w.r.t. each of the 6 faces (in normal direction)
-        vjps_faces = np.zeros((2, 3))
-        for min_max_index in (0, 1):
-            for axis_normal in self._face_axes_for_paths(paths):
-                key = (_BOX_FACES, min_max_index, axis_normal)
-                if key not in sample_sets:
-                    raise AdjointError(
-                        f"'Box' sample sets are missing the canonical {key} key required "
-                        f"by derivative paths {tuple(paths)}; got keys {tuple(sample_sets)}."
-                    )
-                sample_set = sample_sets[key]
-                if sample_set.num_points == 0:
-                    continue  # explicit zero contribution
-                gradient_at_points = self._sample_set_integrand(derivative_info, key)
-                vjps_faces[min_max_index, axis_normal] = np.sum(
-                    sample_set.weights.values * np.real(gradient_at_points)
-                )
+        """Compute ``center``/``size`` derivatives from pre-generated face sample sets.
 
-        # post-process these values to give the gradients w.r.t. center and size
-        vjps_center_size = self._derivatives_center_size(vjps_faces=vjps_faces)
+        Every face sample ``p`` with force ``F_p`` contributes ``v . F_p`` with the box's
+        parametric surface velocity: ``e_i`` for ``center_i`` and ``(p_i - c_i)/size_i e_i``
+        for ``size_i`` (``±1/2 n_i e_i`` on a collapsed axis). Tangential components on
+        the faces of the other axes vanish for boundary-integrand forces and carry the
+        edge motion for collar forces.
+        """
+        center = np.array([get_static(value) for value in self.center], dtype=float)
+        size = np.array([get_static(value) for value in self.size], dtype=float)
+        expected_keys = {
+            (_BOX_FACES, min_max_index, axis_normal)
+            for min_max_index in (0, 1)
+            for axis_normal in range(3)
+        }
+        missing = expected_keys - set(sample_sets)
+        if missing:
+            raise AdjointError(
+                f"'Box' sample sets are missing the canonical {sorted(missing)} keys required "
+                f"by derivative paths {tuple(paths)}; got keys {tuple(sample_sets)}."
+            )
+
+        vjp_center = np.zeros(3)
+        vjp_size = np.zeros(3)
+        for key in sorted(expected_keys):
+            sample_set = sample_sets[key]
+            if sample_set.num_points == 0:
+                continue  # explicit zero contribution
+            forces = self._sample_set_forces(derivative_info, key)
+            points = np.asarray(sample_set.points.values, dtype=float)
+            normals = np.asarray(sample_set.normals.values, dtype=float)
+            vjp_center += np.sum(forces, axis=0)
+            for axis in range(3):
+                if size[axis] > 0.0:
+                    speed = (points[:, axis] - center[axis]) / size[axis]
+                else:
+                    speed = 0.5 * normals[:, axis]
+                vjp_size[axis] += np.sum(forces[:, axis] * speed)
+
+        vjps_center_size = {
+            "center": tuple(vjp_center.tolist()),
+            "size": tuple(vjp_size.tolist()),
+        }
 
         # store only the gradients asked for in 'field_paths'
         derivative_map = {}

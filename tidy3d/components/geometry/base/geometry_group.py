@@ -335,10 +335,12 @@ class GeometryGroup(Geometry):
         translation_requested = _TRANSLATION_PATH in requested_paths
         paths_by_child = self._sub_paths_by_child(paths)
         sets_by_child = {index: {} for index in paths_by_child}
-        integrands_by_child = {index: {} for index in paths_by_child}
+        forces_by_child = {index: {} for index in paths_by_child}
+        moments_by_child = {index: {} for index in paths_by_child}
         for payload, partitions in (
             (sample_sets, sets_by_child),
-            (derivative_info.point_integrands, integrands_by_child),
+            (derivative_info.point_forces, forces_by_child),
+            (derivative_info.point_force_moments, moments_by_child),
         ):
             for key, value in payload.items():
                 if key[:1] == ("geometries",) and key[1] in partitions:
@@ -348,7 +350,8 @@ class GeometryGroup(Geometry):
             child = self.geometries[index]
             child_info = replace(
                 derivative_info,
-                point_integrands=integrands_by_child[index],
+                point_forces=forces_by_child[index],
+                point_force_moments=moments_by_child[index],
             )
             child_vjps = child._compute_derivatives_from_sample_sets(
                 sample_sets=sets_by_child[index], paths=child_paths, derivative_info=child_info

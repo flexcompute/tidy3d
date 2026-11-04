@@ -920,10 +920,8 @@ class TriangleMesh(base.Geometry, ABC):
             if sample_set.num_points == 0:
                 vjps[_TRANSLATION_PATH] = (0.0, 0.0, 0.0)
             else:
-                g = self._sample_set_integrand(derivative_info, _MESH_SURFACE_KEY)
                 gradient = np.sum(
-                    (sample_set.weights.values * np.real(g))[:, None] * sample_set.normals.values,
-                    axis=0,
+                    self._sample_set_forces(derivative_info, _MESH_SURFACE_KEY), axis=0
                 )
                 vjps[_TRANSLATION_PATH] = tuple(gradient.tolist())
         if _MESH_DERIVATIVE_PATH not in paths:
@@ -964,10 +962,10 @@ class TriangleMesh(base.Geometry, ABC):
         num_samples = sample_set.num_points
         batch_size = _SURFACE_GRADIENT_BATCH_SIZE
 
-        gradient_batches = (
+        force_batches = (
             (
                 slice(start, stop),
-                self._sample_set_integrand(
+                self._sample_set_forces(
                     derivative_info, _MESH_SURFACE_KEY, sample_slice=slice(start, stop)
                 ),
             )
@@ -975,15 +973,13 @@ class TriangleMesh(base.Geometry, ABC):
             for stop in (min(start + batch_size, num_samples),)
         )
 
-        for sample_slice, g in gradient_batches:
-            # accumulate per-vertex contributions using barycentric weights
-            weights = (sample_set.weights.values[sample_slice] * g).real
-            normals = sample_set.normals.values[sample_slice]
+        for sample_slice, forces in force_batches:
+            # a vertex displacement moves each sample of its faces with its barycentric
+            # weight; contract the sample forces with those velocities and scatter
             faces = np.asarray(metadata.faces.values[sample_slice]).astype(int)
             bary = np.asarray(metadata.barycentric.values[sample_slice])
-            contrib_vec = weights[:, None] * normals
             for vertex_idx in range(3):
-                scaled = contrib_vec * bary[:, vertex_idx][:, None]
+                scaled = forces * bary[:, vertex_idx][:, None]
                 np.add.at(triangle_grads[:, vertex_idx, :], faces, scaled)
 
         vjps[_MESH_DERIVATIVE_PATH] = triangle_grads

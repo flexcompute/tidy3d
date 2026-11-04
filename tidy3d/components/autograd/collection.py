@@ -30,8 +30,15 @@ from tidy3d.em.translate.sample_sets import (
 from tidy3d.log import log
 
 from .adjoint_settings import adjoint_settings_from_config
+from .collar_staging import collar_sampling_data
 from .spacing import SamplingScanIndex, adjoint_sampling_resolution
-from .staging import _fully_anisotropic_trigger, _metal_like_trigger, stage_sample_sets
+from .staging import (
+    _fully_anisotropic_trigger,
+    _metal_like_trigger,
+    is_pec_surface,
+    pec_sample_spacing,
+    stage_sample_sets,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -75,12 +82,26 @@ def collect_adjoint_sample_sets(
 
         geometry = structure.geometry
         bounds = geometry.bounds
+        spacing = resolution.spacing
+        material_wavelength = resolution.material_wavelength
+        if is_pec_surface(structure.medium, simulation):
+            # PEC-like (PEC, or a lossy metal's surface impedance) gradients read fields at
+            # Yee locations (collar cells, side-snapped nodes): samples denser than the local
+            # grid step add no information, and coarser ones under-resolve the edge fields.
+            # The spacing is therefore the grid's, not the material scan's, which does not
+            # see a zero-thickness PEC sheet (it would keep a vacuum spacing of a tenth of a
+            # wavelength there). Tessellated and polygonal samplers (Sphere, Cylinder) size
+            # their elements from the discretization wavelength, so it follows the grid too: the
+            # scan's floor (a twentieth of the free-space wavelength) would leave a circle a
+            # polygon coarser than the grid on fine (RF) grids.
+            spacing = pec_sample_spacing(simulation.grid, bounds, spacing)
+            material_wavelength = settings.points_per_wavelength * spacing
         ctx = SamplingContext(
             bounds=bounds,
             bounds_intersect=bounds_intersection(simulation.bounds, bounds),
             simulation_bounds=simulation.bounds,
-            spacing=resolution.spacing,
-            material_wavelength=resolution.material_wavelength,
+            spacing=spacing,
+            material_wavelength=material_wavelength,
         )
 
         sample_sets = geometry._make_adjoint_sample_sets(
@@ -100,15 +121,33 @@ def collect_adjoint_sample_sets(
             grid=simulation.grid,
         )
 
+        # structures whose motion moves the effective PEC surface (PEC structures, and
+        # dielectrics carving a PEC) stage the collar (exterior stress sleeve): the shape
+        # gradient of that surface is read from the stress in the cells around it instead
+        # of from side-snapped boundary samples. PEC staging marks both.
+        collar = None
+        if any(
+            sample_set.staging is not None and sample_set.staging.pec_sampling is not None
+            for sample_set in sample_sets.values()
+        ):
+            collar = collar_sampling_data(
+                staged=sample_sets,
+                structure=structure,
+                structure_index=structure_index,
+                simulation=simulation,
+                scan_index=scan_index,
+                grid=simulation.grid,
+            )
         structure_sample_sets = StructureSampleSets(
             entries=tuple(
                 SampleSetEntry(key=key, sample_set=sample_set)
                 for key, sample_set in sample_sets.items()
             ),
             requested_paths=geometry_paths,
-            spacing=resolution.spacing,
-            material_wavelength=resolution.material_wavelength,
+            spacing=spacing,
+            material_wavelength=material_wavelength,
             material_length_scale=resolution.material_length_scale,
+            collar=collar,
         )
         structure_entries.append(
             StructureSampleSetsEntry(
@@ -117,8 +156,14 @@ def collect_adjoint_sample_sets(
             )
         )
 
-        if structure_sample_sets.num_points > 0 and _fully_anisotropic_trigger(
-            structure, simulation, scan_index
+        # a PEC's collar takes the full permittivity tensor, so only interfaces read diagonally
+        collar_only = (
+            is_pec_surface(structure.medium, simulation) and structure_sample_sets.collar_staged
+        )
+        if (
+            structure_sample_sets.num_points > 0
+            and not collar_only
+            and _fully_anisotropic_trigger(structure, simulation, scan_index)
         ):
             # not an error: this matches the legacy volumetric path's treatment, but
             # the approximation deserves surfacing at collection time
@@ -142,8 +187,9 @@ def collect_adjoint_sample_sets(
                 "with metal-like permittivity (real part below "
                 "'config.adjoint.pec_detection_threshold') that is not declared PEC, so "
                 "its shape gradient uses dielectric-only surface integration. If PEC "
-                "behavior is intended, use a PEC medium or set the structure's "
-                "'background_medium' to PEC so the PEC correction is applied."
+                "behavior is intended, use a PEC medium or a 'LossyMetalMedium' under the surface "
+                "impedance subpixel method (or set the "
+                "structure's 'background_medium' to one) so the metal boundary is handled."
             )
 
         from .point_consumption import _adjoint_point_cloud_chunk_size
@@ -170,8 +216,8 @@ def collect_adjoint_sample_sets(
                 f"Adjoint sample sets: structure {structure_index}: "
                 f"{len(structure_sample_sets.entries)} keys, "
                 f"{structure_sample_sets.num_points} points, "
-                f"spacing {resolution.spacing:.3e} um, "
-                f"material wavelength {resolution.material_wavelength:.3e} um."
+                f"spacing {spacing:.3e} um, "
+                f"material wavelength {material_wavelength:.3e} um."
             )
         elif len(structure_entries) == _MAX_STRUCTURE_LOG_LINES + 1:
             log.debug(

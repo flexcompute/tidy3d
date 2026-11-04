@@ -87,7 +87,11 @@ def bind(
 
     vjps: dict[PathType, Any] = {}
     for binding in bindings:
-        outputs = {} if binding.term is None else results[binding.term]
+        outputs = {}
+        for term in binding.terms:
+            if outputs.keys() & results[term].keys():
+                raise AdjointError(f"Terms {binding.terms} bound together share output keys.")
+            outputs.update(results[term])
         for path, value in binding.reduce(outputs, frequencies).items():
             vjps[path] = vjps[path] + value if path in vjps else value
     return vjps

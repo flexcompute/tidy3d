@@ -20,6 +20,7 @@ from tidy3d.components.autograd.monitor_names import adjoint_monitor_name
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.bound_ops import bounds_intersection
 from tidy3d.components.thin_lens import validate_thin_lens_adjoint_background
+from tidy3d.em.translate.shape_terms import warn_collar_source_cuts
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel
@@ -148,6 +149,7 @@ def setup_adj(
         adjoint_monitors=adjoint_monitors,
     )
     sims_adj = adjoint_setup_result.simulations
+    warn_collar_source_cuts(derivative_run.program, sims_adj)
 
     if len(sims_adj) > max_num_adjoint_per_fwd:
         raise AdjointError(

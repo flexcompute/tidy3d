@@ -626,13 +626,23 @@ class Geometry(Tidy3dBaseModel, ABC):
         )
 
     @staticmethod
-    def _sample_set_integrand(
-        derivative_info: ShapeDerivativeContext, key: PathType, sample_slice: slice | None = None
+    def _sample_set_forces(
+        derivative_info: ShapeDerivativeContext,
+        key: PathType,
+        sample_slice: slice | None = None,
+        expansion_rate: float = 0.0,
     ) -> np.ndarray:
-        """One set's per-point integrand, read from the derivative's point integrands."""
-        from tidy3d.em.translate.sample_sets import sample_set_integrand
+        """One set's per-sample force vectors ``(N, 3)``, read from the derivative's forces.
 
-        return sample_set_integrand(derivative_info, key, sample_slice=sample_slice)
+        Geometries contract these with their surface velocity vectors:
+        ``dJ/dk = sum_p v_{p,k} . F_p``. ``expansion_rate`` is the rate at which the
+        parameter's velocity keeps growing away from the surface (``1/R`` for a radius).
+        """
+        from tidy3d.em.translate.sample_sets import sample_set_forces
+
+        return sample_set_forces(
+            derivative_info, key, sample_slice=sample_slice, expansion_rate=expansion_rate
+        )
 
     def _compute_derivatives_from_sample_sets(
         self,

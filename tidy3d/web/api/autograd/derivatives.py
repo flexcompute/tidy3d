@@ -162,7 +162,7 @@ def run_vjps(
 
     program = run.program
     queries = [b for b in run.bindings if _is_query(b)]
-    regular_terms = {b.term for b in run.bindings if not _is_query(b)}
+    regular_terms = {term for b in run.bindings if not _is_query(b) for term in b.terms}
     results: Results = {}
     query_results: dict[int, list[tuple[np.ndarray, dict[str, dict[tuple, Any]]]]] = {}
     batch_size = None
