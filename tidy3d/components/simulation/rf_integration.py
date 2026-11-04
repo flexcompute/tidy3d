@@ -1,12 +1,10 @@
-"""RF classification, licensing warnings, and microwave validation for ``Simulation``."""
+"""RF classification and licensing warnings for ``Simulation``."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.medium import LossyMetalMedium
-from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.monitor import DipoleEmissionMonitor, FreqMonitor
 from tidy3d.config import config
 from tidy3d.log import log
@@ -95,26 +93,3 @@ def _warn_rf_license(self: Any) -> None:
     )
     msg += rf_component_breakdown_msg
     log.warning(msg, log_once=True)
-
-
-def _validate_microwave_mode_specs(self: Any) -> None:
-    """Raise error if any microwave mode specifications with ``AutoImpedanceSpec`` will
-    fail to instantiate.
-    """
-    for monitor in self.monitors:
-        if not isinstance(monitor, MicrowaveModeMonitor | MicrowaveModeSolverMonitor):
-            continue
-
-        monitor.mode_spec._validate_auto_impedance_setup(
-            center=monitor.center,
-            size=monitor.size,
-            colocate=monitor.colocate,
-            volumetric_structures=self.volumetric_structures,
-            grid=self.grid,
-            symmetry=self.symmetry,
-            simulation_geometry=self.simulation_geometry,
-            label=f" for monitor '{monitor.name}'",
-            interior_disjoint_geometries=ModePlaneAnalyzer.apply_interior_disjoint_geometries(
-                self.structure_priority_mode
-            ),
-        )

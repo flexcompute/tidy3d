@@ -28,6 +28,7 @@ def validate_pre_upload(sim: Simulation, *, source_required: bool = True) -> Non
     validation turns off, sets the port check.
     """
     context = SimulationValidationContext(
+        pre_upload=True,
         source_required=source_required,
         check_ports_reach_pml=(
             config.validation.check_ports_reach_pml and not fast_validation_active()

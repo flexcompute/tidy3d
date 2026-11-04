@@ -24,9 +24,6 @@ from tidy3d.components.monitor import (
     DipoleEmissionMonitor,
     FieldStructureTimeMonitor,
     FieldTimeMonitor,
-    FreqMonitor,
-    MediumMonitor,
-    PermittivityMonitor,
     PointCloudFieldMonitor,
     PointCloudPermittivityMonitor,
     SurfaceIntegrationMonitor,
@@ -265,42 +262,6 @@ def _validate_time_monitors_num_steps(self: Any) -> None:
                 "the monitor is not zero-dimensional. Change the geometry to a point monitor, "
                 "or use 'start', 'stop', and 'interval' to reduce the number of time steps "
                 "at which the monitor stores data."
-            )
-
-
-def _validate_freq_monitors_freq_range(self: Any) -> None:
-    """Rise the error if any DFT monitors have frequencies outside of the simulation frequency range."""
-    source_ranges = [source.source_time._frequency_range_sigma_cached for source in self.sources]
-    if not source_ranges:
-        return
-
-    freq_min = (
-        min((freq_range[0] for freq_range in source_ranges), default=0.0)
-        * constants.MIN_MONITOR_FREQUENCY_RANGE_PARAMETER
-    )
-    freq_max = (
-        max((freq_range[1] for freq_range in source_ranges), default=0.0)
-        * constants.MAX_MONITOR_FREQUENCY_RANGE_PARAMETER
-    )
-    sci_fmin, sci_fmax = self._scientific_notation(freq_min, freq_max)
-
-    for monitor_ind, monitor in enumerate(self.monitors):
-        if not isinstance(monitor, FreqMonitor) or isinstance(
-            monitor, PermittivityMonitor | MediumMonitor | PointCloudPermittivityMonitor
-        ):
-            continue
-
-        freqs = np.array(monitor.freqs)
-        if freqs.min() < freq_min or freqs.max() > freq_max:
-            self._raise_validation_error_at_loc(
-                f"Frequency {self._monitor_validation_label(monitor)} contains frequencies "
-                f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
-                "(Hz) as defined by the sources.",
-                "monitors",
-                self._monitor_validation_index(
-                    monitor_name=monitor.name, fallback_index=monitor_ind
-                ),
-                "freqs",
             )
 
 

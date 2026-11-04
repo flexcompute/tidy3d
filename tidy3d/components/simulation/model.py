@@ -830,7 +830,6 @@ class Simulation(AbstractYeeGridSimulation):
     validate_rf_type = _rf_integration_methods.validate_rf_type
     requires_enterprise_license = _rf_integration_methods.requires_enterprise_license
     _warn_rf_license = _rf_integration_methods._warn_rf_license
-    _validate_microwave_mode_specs = _rf_integration_methods._validate_microwave_mode_specs
 
     # SimulationModeIntegration
     _validate_modes_size = _mode_integration_methods._validate_modes_size
@@ -877,7 +876,6 @@ class Simulation(AbstractYeeGridSimulation):
     _projection_monitor_media_on_plane = _monitors_methods._projection_monitor_media_on_plane
     _validate_monitor_size = _monitors_methods._validate_monitor_size
     _validate_time_monitors_num_steps = _monitors_methods._validate_time_monitors_num_steps
-    _validate_freq_monitors_freq_range = _monitors_methods._validate_freq_monitors_freq_range
     _monitors_data_size = _monitors_methods._monitors_data_size
     monitors_data_size = _monitors_methods.monitors_data_size
     _validate_datasets_not_none = _monitors_methods._validate_datasets_not_none
@@ -1063,8 +1061,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_tfsf_structure_intersections()
         self._warn_time_monitors_outside_run_time()
         self._validate_time_monitors_num_steps()
-        self._validate_freq_monitors_freq_range()
-        self._validate_microwave_mode_specs()
         from tidy3d.em.translate.fdtd.validation import validate_pre_upload
 
         try:

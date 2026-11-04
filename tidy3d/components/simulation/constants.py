@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from flexcompute.core._migration.solver.fdtd.schema.validation_schema import (
     MAX_DIFFRACTION_ORDER_GRID_SIZE,  # noqa: F401 - re-exported; the limit lives once in core
+    MAX_MONITOR_FREQUENCY_RANGE_PARAMETER,  # noqa: F401 - re-exported; the limit lives once in core
     MAX_NUM_SOURCES,  # noqa: F401 - re-exported; the limit lives once in core
     MIN_GRIDS_PER_WVL,  # noqa: F401 - re-exported; the limit lives once in core
+    MIN_MONITOR_FREQUENCY_RANGE_PARAMETER,  # noqa: F401 - re-exported; the limit lives once in core
 )
 
 from tidy3d.constants import inf
@@ -21,8 +23,6 @@ MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
 MAX_SIMULATION_DATA_SIZE_GB = 50
 MAX_ADJOINT_SAMPLE_SETS_SIZE_GB = 5
 WARN_MODE_NUM_CELLS = 1e5
-MIN_MONITOR_FREQUENCY_RANGE_PARAMETER = 0.1
-MAX_MONITOR_FREQUENCY_RANGE_PARAMETER = 10
 NUM_CELLS_WARN_EPSILON = 100_000_000
 NUM_STRUCTURES_WARN_EPSILON = 10_000
 PML_HEIGHT_FOR_0_DIMS = inf
