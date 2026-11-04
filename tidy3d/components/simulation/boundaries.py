@@ -8,7 +8,6 @@ import autograd.numpy as np
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import (
-    CLIPPING_MARGIN,
     PML,
     ABCBoundary,
     Absorber,
@@ -147,29 +146,6 @@ def pml_thicknesses(self: Any) -> list[tuple[float, float]]:
         pml_thicknesses.append((thick_l, thick_r))
 
     return pml_thicknesses
-
-
-def _pml_extrusion_clipping_bound_ind(self: Any, axis: int, side: int) -> int | None:
-    """Grid-boundary index where the PML extrusion clipping inset reaches into the domain.
-
-    The "extrusion region" spans from the outer simulation boundary through the PML and an
-    additional :data:`CLIPPING_MARGIN` cells of interior. This method returns the inner-most
-    boundary index of that region (i.e., ``num_layers + CLIPPING_MARGIN`` on the minus side
-    and the analogous index counting from the far end on the plus side).
-
-    Returns ``None`` when there are no absorber layers on that side or the computed index
-    falls outside the grid. This helper does not check whether ``extrude_structures`` is
-    actually enabled — callers that only care when extrusion is active must gate separately.
-    """
-    n_layers = self.num_pml_layers[axis][side]
-    if n_layers == 0:
-        return None
-    n_bounds = len(self.grid.boundaries.to_list[axis])
-    if side == 0:
-        idx = n_layers + CLIPPING_MARGIN
-        return idx if idx < n_bounds else None
-    idx = n_bounds - 1 - n_layers - CLIPPING_MARGIN
-    return idx if idx >= 0 else None
 
 
 @cached_property

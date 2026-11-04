@@ -1384,6 +1384,7 @@ COMPONENT_ERROR_TYPES = {
     # fdtd
     "solver.fdtd.auto_grid_wavelength_undefined": "tidy3d.exceptions:SetupError",
     "solver.fdtd.incompatible_material_intersection": "tidy3d.exceptions:ValidationError",
+    "solver.fdtd.no_sources": "tidy3d.exceptions:SetupError",
     "solver.fdtd.too_many_sources": "tidy3d.exceptions:SetupError",
     # mode-workflow
     "solver.mode.angle_rotation_unsupported_medium": "tidy3d.exceptions:SetupError",

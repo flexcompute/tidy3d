@@ -13,11 +13,8 @@ from pydantic import (
 )
 
 from tidy3d._runtime import always_validate, fast_validation_active
-from tidy3d.components.boundary import PML, Absorber, BoundarySpec, StablePML
+from tidy3d.components.boundary import BoundarySpec
 from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
-
-# ``Box`` is used by the ``Simulation`` class doctest.
-from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.medium import (
@@ -33,23 +30,17 @@ from tidy3d.components.monitor import (
     AbstractMediumPropertyMonitor,
     FieldStructureMonitor,
     FieldStructureTimeMonitor,
-    ModeMonitor,
     PointCloudFieldMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldStructureMonitor,
     SurfaceFieldTimeMonitor,
 )
 from tidy3d.components.run_time_spec import RunTimeSpec
-from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import TYPE_TAG_STR, Symmetry
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor import MonitorType
-from tidy3d.components.validators import (
-    named_obj_descr,
-)
-from tidy3d.config import config
 from tidy3d.constants import SECOND
 from tidy3d.exceptions import (
     SetupError,
@@ -63,7 +54,8 @@ if TYPE_CHECKING:
     from typing import NoReturn
 
     from tidy3d.compat import Self
-    from tidy3d.components.geometry.base import Geometry
+    from tidy3d.components.monitor import ModeMonitor
+    from tidy3d.components.source.field import ModeSource
 
 
 from . import adjoint as _adjoint_methods
@@ -81,8 +73,6 @@ from . import tfsf as _tfsf_methods
 from . import visualization as _visualization_methods
 from .boundaries import normalize_boundaries_for_zero_dims
 from .yee import AbstractYeeGridSimulation
-
-_ABSORBING_BOUNDARIES = (PML, StablePML, Absorber)
 
 
 class Simulation(AbstractYeeGridSimulation):
@@ -140,7 +130,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     Example
     -------
-    >>> from tidy3d import Sphere, Cylinder, PolySlab
+    >>> from tidy3d import Box, Sphere, Cylinder, PolySlab
     >>> from tidy3d import UniformCurrentSource, GaussianPulse
     >>> from tidy3d import FieldMonitor, FluxMonitor
     >>> from tidy3d import GridSpec, AutoGrid
@@ -1044,129 +1034,9 @@ class Simulation(AbstractYeeGridSimulation):
         >>> [(port.name, face) for port, _, face in sim.check_ports_reach_pml()]
         [('input', 'x-'), ('input', 'x+')]
         """
-        return [
-            (port, self.structures[structure_index], face)
-            for port, structure_index, face in self._find_ports_missing_pml()
-        ]
+        from tidy3d.em.translate.fdtd.validation import mode_ports_missing_pml
 
-    def _find_ports_missing_pml(
-        self, *, near_absorber: bool = False
-    ) -> list[tuple[ModeSource | ModeMonitor, int, str]]:
-        """Find mode ports whose connected structure parts do not reach an absorber's outer edge."""
-        if not self.structures:
-            return []
-
-        # Keep exact section results only for this call; avoid hashing geometry vertex arrays.
-        section_cache: dict[tuple[int, tuple[float, ...], tuple[float, ...]], list[Any]] = {}
-
-        def sections_for(plane: Box, geometry: Geometry) -> list[Any]:
-            key = (id(geometry), plane.center, plane.size)
-            if key not in section_cache:
-                section_cache[key] = plane.intersections_with(geometry)
-            return section_cache[key]
-
-        boundaries = self.boundary_spec.to_list
-        offenders = []
-        bounds = None
-        pml_thicknesses = None
-        for port in (*self.sources, *self.monitors):
-            if not isinstance(port, (ModeSource, ModeMonitor)):
-                continue
-            axis = port.size.index(0.0)
-            if self.size[axis] == 0:
-                continue
-
-            sides = []
-            for side, boundary in enumerate(boundaries[axis]):
-                if not isinstance(boundary, _ABSORBING_BOUNDARIES):
-                    continue
-                if near_absorber:
-                    if pml_thicknesses is None:
-                        pml_thicknesses = self.pml_thicknesses
-                        bounds = self.bounds
-                    distance = abs(port.center[axis] - bounds[side][axis])
-                    if distance > pml_thicknesses[axis][side]:
-                        continue
-                sides.append((side, boundary))
-            if not sides:
-                continue
-
-            # The port-plane intersection is independent of which absorbing side is checked.
-            structure_parts = []
-            for structure_index, structure in enumerate(self.structures):
-                geometry = structure.geometry
-                port_parts = [
-                    part
-                    for section in sections_for(port, geometry)
-                    for part in getattr(section, "geoms", (section,))
-                    if part.area > 0
-                ]
-                if port_parts:
-                    structure_parts.append((structure_index, geometry, port_parts))
-
-            if not structure_parts:
-                continue
-
-            for side, boundary in sides:
-                face = self.simulation_bounds[side][axis]
-                face_center = list(port.center)
-                face_center[axis] = face
-                face_plane = Box(center=tuple(face_center), size=port.size)
-                clipping_plane = None
-                if boundary.extrude_structures:
-                    clipping_index = self._pml_extrusion_clipping_bound_ind(axis, side)
-                    if clipping_index is not None:
-                        clipping_center = list(port.center)
-                        clipping_center[axis] = self.grid.boundaries.to_list[axis][clipping_index]
-                        clipping_plane = Box(center=tuple(clipping_center), size=port.size)
-                face_name = "xyz"[axis] + ("-" if side == 0 else "+")
-                for structure_index, geometry, port_parts in structure_parts:
-                    geometry_face_bound = geometry.bounds[side][axis]
-                    can_reach_absorber_edge = (
-                        geometry_face_bound <= face if side == 0 else geometry_face_bound >= face
-                    )
-                    face_sections = (
-                        sections_for(face_plane, geometry) if can_reach_absorber_edge else []
-                    )
-                    clipping_sections = None
-                    for port_part in port_parts:
-                        reaches_absorber_edge = any(
-                            (face_section.intersection(port_part)).area > 0
-                            for face_section in face_sections
-                        )
-                        if reaches_absorber_edge:
-                            continue
-                        if clipping_sections is None:
-                            clipping_sections = (
-                                sections_for(clipping_plane, geometry)
-                                if clipping_plane is not None
-                                else []
-                            )
-                        is_extruded = any(
-                            (clipping_section.intersection(port_part)).area > 0
-                            for clipping_section in clipping_sections
-                        )
-                        if is_extruded:
-                            continue
-                        offenders.append((port, structure_index, face_name))
-                        break
-        return offenders
-
-    def _warn_mode_ports_not_reaching_absorbing_boundaries(self) -> None:
-        """Optionally warn when nearby mode-port waveguides stop before an absorber's outer edge."""
-        if not config.validation.check_ports_reach_pml or fast_validation_active():
-            return
-        with log as consolidated_logger:
-            for port, structure_index, face in self._find_ports_missing_pml(near_absorber=True):
-                structure = self.structures[structure_index]
-                port_name = port.name or type(port).__name__
-                obj_descr = named_obj_descr(structure, "structures", structure_index)
-                consolidated_logger.warning(
-                    f"Mode port '{port_name}' on {face} crosses {obj_descr}, which does not span "
-                    "the full absorbing region. Extend the structure to `td.inf` or fully "
-                    "through the absorber to avoid artificial reflections.",
-                    custom_loc=["structures", structure_index],
-                )
+        return mode_ports_missing_pml(self)
 
     def validate_pre_upload(self, source_required: bool = True) -> None:
         """Validate the fully initialized simulation is ok for upload to our servers.
@@ -1195,11 +1065,13 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
         self._validate_microwave_mode_specs()
-        self._warn_mode_ports_not_reaching_absorbing_boundaries()
-        log.end_capture(self)
+        from tidy3d.em.translate.fdtd.validation import validate_pre_upload
+
+        try:
+            validate_pre_upload(self, source_required=source_required)
+        finally:
+            log.end_capture(self)
         self._validate_lumped_voltage_sources_before_upload()
-        if source_required and len(self.sources) == 0:
-            raise SetupError("No sources in simulation.")
 
     def _validate_lumped_voltage_sources_before_upload(
         self, references: Sequence[str] | None = None

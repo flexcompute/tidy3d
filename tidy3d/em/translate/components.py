@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from contextvars import ContextVar
 from functools import cache
 from operator import is_
@@ -205,23 +206,41 @@ def _value_at(model: BaseModel, path: ValidationPath) -> Any:
     return value
 
 
-def _present(model: Tidy3dBaseModel, diagnostics: Iterable[ValidationDiagnostic]) -> None:
+def _present(
+    model: Tidy3dBaseModel,
+    diagnostics: Iterable[ValidationDiagnostic],
+    *,
+    consolidate: bool = False,
+) -> None:
     """Log warnings in order, then raise the first error as the public model raised it.
 
     Only the first error's type is resolved from ``COMPONENT_ERROR_TYPES``. An error with a
     path raises there: a mapped type in Pydantic's ``Value error, `` form with the value at
     the path as its input, otherwise the bare message through the model's location helper.
     An error without a path raises its mapped type, ``ValueError`` by default. A warning whose
-    code is in ``COMPONENT_WARNINGS_LOGGED_ONCE`` logs once per session.
+    code is in ``COMPONENT_WARNINGS_LOGGED_ONCE`` logs once per session. With ``consolidate``,
+    consecutive warnings with one code log in one ``with log`` block, so the first logs and the
+    rest are counted.
     """
+    pending: list[ValidationDiagnostic] = []
+
+    def flush() -> None:
+        with log if consolidate and len(pending) > 1 else nullcontext():
+            for item in pending:
+                log.warning(
+                    item.message,
+                    custom_loc=list(item.path),
+                    log_once=item.code in COMPONENT_WARNINGS_LOGGED_ONCE,
+                )
+        pending.clear()
+
     for diagnostic in diagnostics:
         if diagnostic.severity == "warning":
-            log.warning(
-                diagnostic.message,
-                custom_loc=list(diagnostic.path),
-                log_once=diagnostic.code in COMPONENT_WARNINGS_LOGGED_ONCE,
-            )
+            if pending and pending[-1].code != diagnostic.code:
+                flush()
+            pending.append(diagnostic)
             continue
+        flush()
         type_path = COMPONENT_ERROR_TYPES.get(diagnostic.code)
         error_type = resolve(type_path) if type_path else None
         if not diagnostic.path:
@@ -240,6 +259,21 @@ def _present(model: Tidy3dBaseModel, diagnostics: Iterable[ValidationDiagnostic]
             ],
             hide_input=True,
         )
+    flush()
+
+
+def present_with_context(model: Tidy3dBaseModel, validate: Callable[[Any], Any]) -> None:
+    """Present what ``validate`` reports on the schema of ``model``, consolidated by code.
+
+    ``validate`` runs only the checks that read a context, such as the ones before an upload or a
+    solver run. Construction ran every other check, and its warnings and log lines were shown when
+    the model was built, so the core output of this run stays quiet.
+    """
+    from flexcompute.core.log import log as copied_log
+
+    with copied_log.suppress_output():
+        report = validate(from_component(model))
+    _present(model, report.diagnostics, consolidate=True)
 
 
 def _changes_in_place(value: Any) -> bool:
@@ -264,6 +298,21 @@ class _PassedValues(tuple):
 
     def __deepcopy__(self, memo: dict) -> _PassedValues:
         return self
+
+
+# Holds the schema an instance translated to, so its cached grid serves repeated queries.
+_TRANSLATED_SCHEMA = "_translated_schema"
+
+
+def translated_schema(model: Tidy3dBaseModel) -> object | None:
+    """The schema of ``model``, translated once per instance while the model cannot change."""
+    cached = model._cached_properties.get(_TRANSLATED_SCHEMA)
+    if cached is not None:
+        return cached[0]
+    schema = from_component(model)
+    if not _changes_in_place(model):
+        model._cached_properties[_TRANSLATED_SCHEMA] = _PassedValues((schema,))
+    return schema
 
 
 def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:

@@ -226,7 +226,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     _make_pml_boxes = _boundaries_methods._make_pml_boxes
     _make_pml_box = _boundaries_methods._make_pml_box
     pml_thicknesses = _boundaries_methods.pml_thicknesses
-    _pml_extrusion_clipping_bound_ind = _boundaries_methods._pml_extrusion_clipping_bound_ind
     _periodic = _boundaries_methods._periodic
     num_pml_layers = _boundaries_methods.num_pml_layers
 
