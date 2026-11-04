@@ -399,53 +399,69 @@ def _inside_near_surface(
     return vote.inside(containment, points, origins)
 
 
-def _structure_boundary_mask(
+def _side_probes(
     points: np.ndarray,
     normals: np.ndarray,
     grid_centers: GridCentersType,
     containment: _Containment,
     vote: _SurfaceVote | None = None,
-) -> np.ndarray:
-    """Samples on a boundary of ``geometry``: inside just behind them, outside just ahead.
+) -> dict[str, np.ndarray]:
+    """Whether the structure contains a point just behind (``in``) and ahead (``out``) of each sample.
 
-    Excludes surfaces interior to the structure (e.g. a union operand's face inside the
-    other operand), whose matching inside/outside permittivity must stay matching.
+    A sample is on a boundary of the structure where the two differ. An operand face of a
+    clip operation can face into the result (a difference's subtracted face), so either side
+    may be the inside. Surfaces interior to the structure (e.g. a union operand's face inside
+    the other operand) match on both sides, and their permittivity must stay matching.
     """
-    behind, ahead = (
-        snap_coords_to_boundary(points, normals, grid_centers, is_outside, _BOUNDARY_PROBE_FRACTION)
-        for is_outside in (False, True)
-    )
-    return _inside_near_surface(containment, behind, points, vote) & ~_inside_near_surface(
-        containment, ahead, points, vote
-    )
+    return {
+        side: _inside_near_surface(
+            containment,
+            snap_coords_to_boundary(
+                points, normals, grid_centers, is_outside, _BOUNDARY_PROBE_FRACTION
+            ),
+            points,
+            vote,
+        )
+        for side, is_outside in (("in", False), ("out", True))
+    }
 
 
 def _keep_queries_on_side(
     points: np.ndarray,
-    queries: np.ndarray,
+    queries: dict[str, np.ndarray],
     grid_centers: GridCentersType,
-    boundary: np.ndarray,
+    probes: dict[str, np.ndarray],
     containment: _Containment,
-    is_outside: bool,
     vote: _SurfaceVote | None = None,
-) -> np.ndarray:
-    """Give boundary samples whose sampled node is on the wrong side the nearest valid query.
+) -> dict[str, np.ndarray]:
+    """Give boundary samples with a node on the wrong side the nearest valid sample's queries.
 
     Permittivity is recorded at the grid node nearest each query. Snapping follows each
     sample's own face normal, so next to an acute or curved edge that node can lie across
-    the adjacent face, on the other side of the structure.
+    the adjacent face, on the other side of the structure. Both sides move together: moving
+    only the wrong one leaves the other node past the adjacent face, where it reads a third
+    medium, so two structures sharing the face would see different contrasts there.
     """
-    nodes = nearest_grid_coords(grid_centers, queries)
-    wrong = boundary & (_inside_near_surface(containment, nodes, points, vote) == is_outside)
+    boundary = probes["in"] != probes["out"]
+    wrong = np.zeros_like(boundary)
+    for side, query in queries.items():
+        nodes = nearest_grid_coords(grid_centers, query)
+        wrong |= _inside_near_surface(containment, nodes, points, vote) != probes[side]
+    wrong &= boundary
     valid = np.flatnonzero(boundary & ~wrong)
     if not wrong.any() or valid.size == 0:
         return queries
     from scipy.spatial import cKDTree
 
     _, nearest = cKDTree(points[valid]).query(points[wrong])
-    queries = queries.copy()
-    queries[wrong] = queries[valid[nearest]]
-    return queries
+    donors = valid[nearest]
+    reverse = probes["in"][wrong] != probes["in"][donors]
+    moved = {}
+    for side, query in queries.items():
+        other_side = "out" if side == "in" else "in"
+        moved[side] = query.copy()
+        moved[side][wrong] = np.where(reverse[:, None], queries[other_side][donors], query[donors])
+    return moved
 
 
 def _material_query_points(
@@ -462,13 +478,13 @@ def _material_query_points(
     # a mesh's single sample set covers its whole surface, so its samples can vote on sides
     vote = _SurfaceVote(points, normals) if isinstance(containment.geometry, TriangleMesh) else None
     query_points = {}
-    boundary = None
+    probes = None
     for component, grid_key in _EPS_COMPONENT_GRID_KEYS.items():
         grid_centers = _component_grid_centers(grid, grid_key)
-        if boundary is None:
-            boundary = _structure_boundary_mask(points, normals, grid_centers, containment, vote)
-        for side, is_outside in (("in", False), ("out", True)):
-            queries = _clamp_to_bounds(
+        if probes is None:
+            probes = _side_probes(points, normals, grid_centers, containment, vote)
+        queries = {
+            side: _clamp_to_bounds(
                 snap_coords_to_boundary(
                     spatial_coords=points,
                     normals=normals,
@@ -478,11 +494,11 @@ def _material_query_points(
                 ),
                 simulation,
             )
-            query_points[f"{side}_{component}"] = _point_data_array(
-                _keep_queries_on_side(
-                    points, queries, grid_centers, boundary, containment, is_outside, vote
-                )
-            )
+            for side, is_outside in (("in", False), ("out", True))
+        }
+        kept = _keep_queries_on_side(points, queries, grid_centers, probes, containment, vote)
+        for side, query in kept.items():
+            query_points[f"{side}_{component}"] = _point_data_array(query)
     return MaterialQueryPoints(**query_points)
 
 
