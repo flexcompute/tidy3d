@@ -5,7 +5,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Literal
 
-import autograd.numpy as anp
+from flexcompute.core._migration.em.scene.validation import (
+    structure_edge_message,
+    structure_edges_at_simulation_bounds,
+)
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
@@ -160,24 +163,12 @@ class AbstractSimulation(Box, ABC):
             return self
 
         sim_box = Box(size=self.size, center=self.center)
-        sim_bound_min, sim_bound_max = sim_box.bounds
-        sim_bounds = list(sim_bound_min) + list(sim_bound_max)
-
         with log as consolidated_logger:
-            for istruct, structure in enumerate(self.structures):
-                struct_bound_min, struct_bound_max = structure.geometry.bounds
-                struct_bounds = list(struct_bound_min) + list(struct_bound_max)
-
-                for sim_val, struct_val in zip(sim_bounds, struct_bounds):
-                    if anp.isclose(sim_val, struct_val):
-                        consolidated_logger.warning(
-                            f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
-                            "to simulation edges. This can cause unexpected behavior. "
-                            "If intending to extend the structure to infinity along one dimension, "
-                            "use td.inf as a size variable instead to make this explicit.",
-                            custom_loc=["structures", istruct],
-                        )
-                        continue
+            for istruct in structure_edges_at_simulation_bounds(sim_box.bounds, self.structures):
+                consolidated_logger.warning(
+                    structure_edge_message(istruct),
+                    custom_loc=["structures", istruct],
+                )
 
         return self
 

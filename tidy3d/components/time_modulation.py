@@ -239,13 +239,13 @@ class SpaceTimeModulation(Tidy3dBaseModel):
         \\delta \\epsilon(r, t) = \\Re[amp\\_time(t) \\cdot amp\\_space(r)]
     """
 
-    space_modulation: SpaceModulationType = Field(
+    space_modulation: SpaceModulation = Field(
         default_factory=SpaceModulation,
         title="Space modulation",
         description="Space modulation part from the separable SpaceTimeModulation.",
     )
 
-    time_modulation: TimeModulationType = Field(
+    time_modulation: ContinuousWaveTimeModulation = Field(
         title="Time modulation",
         description="Time modulation part from the separable SpaceTimeModulation.",
     )

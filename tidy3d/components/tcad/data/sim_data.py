@@ -6,6 +6,8 @@ from abc import ABC
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.data.validation import validate_data_monitors_in_mesher
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, model_validator
 from xarray import DataArray as XrDataArray
 
@@ -886,18 +888,14 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
 
     @model_validator(mode="after")
     def data_monitors_match_sim(self) -> Self:
-        """Ensure each :class:`~tidy3d.components.base_sim.data.monitor_data.AbstractMonitorData` in ``.data`` corresponds to a monitor in
-        ``.simulation``.
-        """
-        mnt_names = {mnt.name for mnt in self.monitors}
-
-        for mnt_data in self.data:
-            monitor_name = mnt_data.monitor.name
-            if monitor_name not in mnt_names:
-                raise DataError(
-                    f"Data with monitor name '{monitor_name}' supplied "
-                    f"but not found in the list of monitors."
-                )
+        """Require every data monitor to belong to the mesher."""
+        raise_first_error(
+            validate_data_monitors_in_mesher(
+                (data.monitor.name for data in self.data),
+                {monitor.name for monitor in self.monitors},
+            ),
+            DataError,
+        )
         return self
 
     def get_monitor_by_name(self, name: str) -> VolumeMeshMonitor:

@@ -6,6 +6,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
+from flexcompute.core._migration.em.scene.validation import (
+    named_object_description as named_obj_descr,
+)
+from flexcompute.core._migration.em.scene.validation import objects_outside_simulation
 from numpy.typing import NDArray
 from pydantic import field_validator, model_validator
 
@@ -66,14 +70,6 @@ def wrapped_angle_distance(angle: float, target: float, period: float) -> float:
 def is_close_to_glancing_angle(angle_theta: float, cutoff: float) -> bool:
     """Check whether ``angle_theta`` is close to any odd multiple of ``π/2``."""
     return wrapped_angle_distance(angle_theta, np.pi / 2, np.pi) < cutoff
-
-
-def named_obj_descr(obj: Any, field_name: str, position_index: int) -> str:
-    """Generate a string describing a named object which can be used in error messages."""
-    descr = f"simulation.{field_name}[{position_index}] (no `name` was specified)"
-    if hasattr(obj, "name") and obj.name:
-        descr = f"'{obj.name}' (simulation.{field_name}[{position_index}])"
-    return descr
 
 
 def points_outside_bounds(
@@ -345,20 +341,16 @@ def assert_objects_in_sim_bounds(
         sim_size = self.size
         sim_box = Box(size=sim_size, center=sim_center)
 
-        # Do a strict check, unless simulation is 0D along a dimension
-        strict_ineq: list[bool] = [size != 0 and strict_inequality for size in sim_size]
-
         with log as consolidated_logger:
-            for position_index, geometric_object in enumerate(val):
-                if getattr(geometric_object, "_skip_sim_bounds_intersection_validation", False):
-                    continue
-                if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
-                    obj_descr = named_obj_descr(geometric_object, field_name, position_index)
-                    message = f"{obj_descr} is outside of the simulation domain."
-                    custom_loc = [field_name, position_index]
-                    if error:
-                        self._raise_validation_error_at_loc(message, *custom_loc)
-                    consolidated_logger.warning(message, custom_loc=custom_loc)
+            for position_index, geometric_object in objects_outside_simulation(
+                sim_box, val, strict_inequality=strict_inequality
+            ):
+                obj_descr = named_obj_descr(geometric_object, field_name, position_index)
+                message = f"{obj_descr} is outside of the simulation domain."
+                custom_loc = [field_name, position_index]
+                if error:
+                    self._raise_validation_error_at_loc(message, *custom_loc)
+                consolidated_logger.warning(message, custom_loc=custom_loc)
 
         return self
 

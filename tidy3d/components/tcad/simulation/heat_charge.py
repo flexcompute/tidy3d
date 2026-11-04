@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -21,11 +20,7 @@ from tidy3d.components.geometry.base import Box, Transformed
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.geometry.primitives import Cylinder
 from tidy3d.components.geometry.utils import flatten_groups
-from tidy3d.components.material.tcad.charge import (
-    AbstractChargeMedium,
-    SemiconductorMedium,
-)
-from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
+from tidy3d.components.material.types import StructureMediumType
 from tidy3d.components.medium import Medium
 from tidy3d.components.medium.protected import validate_protected_heat_charge_assets
 from tidy3d.components.scene import Scene
@@ -41,9 +36,6 @@ from tidy3d.components.spice.types import (
 )
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
-from tidy3d.components.tcad.generation_recombination import (
-    SelberherrImpactIonization,
-)
 from tidy3d.components.tcad.grid import UnstructuredGridType
 from tidy3d.components.tcad.monitors.charge import (
     SteadyPotentialMonitor,
@@ -83,14 +75,9 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-    from pydantic import FiniteFloat
-
     from tidy3d.compat import Self
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import Ax, Bound, Shapely
-    from tidy3d.components.types.base import ArrayFloat1D
     from tidy3d.components.viz import PlotParams
 
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
@@ -554,16 +541,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 "monitors",
                 idx,
             )
-
-    @staticmethod
-    def _charge_spec(medium: Any) -> Any:
-        """The charge medium of ``medium``, reading through a ``MultiPhysicsMedium``.
-
-        A single-physics medium is its own charge spec; media with no charge
-        behaviour (a fluid, say) pass through unchanged and match none of the
-        charge medium classes.
-        """
-        return medium.charge if isinstance(medium, MultiPhysicsMedium) else medium
 
     @equal_aspect
     @add_ax_if_none
@@ -1408,109 +1385,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 return [float(c) for c in np.atleast_1d(current)]
         return []
 
-    @property
-    def _num_dc_solves(self) -> int:
-        """Number of nonlinear solves the charge solver runs to cover the DC sweep.
-
-        Mirrors the solver's sweep construction: a single requested voltage is
-        one direct solve; otherwise the sweep starts at 0 V and covers positive
-        then negative voltages by increasing magnitude, inserting a warm-start
-        solve per ``convergence_dv`` interval within each pass. A current sweep is
-        ordered the same way but inserts no warm-start solves. Doping ramp-up
-        adds ``tolerance_settings.ramp_up_iters - 1`` solves. With impact
-        ionization, or with a quasi-Fermi-gradient driving force in a field
-        dependence, every bias point is solved twice: first with the
-        ionization source frozen and the quasi-Fermi-driven carriers at their
-        low-field mobility, then with both active. Ramp levels are solved once.
-        Charge sims only.
-        """
-        voltages = self._dc_voltages
-
-        # Doping ramp: the initial solve runs once per ramp level.
-        ramp_solves = self.analysis_spec.tolerance_settings.ramp_up_iters - 1
-
-        # Staged ionization or a quasi-Fermi driving force re-solves every bias point,
-        # but not the ramp levels.
-        staged = self._uses_impact_ionization() or self._uses_quasi_fermi_driving_force()
-        solves_per_point = 2 if staged else 1
-
-        currents = self._dc_currents
-        if currents:
-            # 1 for the initial zero-current solve, then one per nonzero current.
-            bias_points = 1 + sum(1 for c in currents if c != 0)
-            return solves_per_point * bias_points + ramp_solves
-
-        if len(voltages) <= 1:
-            # No sweep: one direct solve at the requested bias.
-            return solves_per_point + ramp_solves
-
-        convergence_dv = self.analysis_spec.convergence_dv
-        positive = sorted(v for v in voltages if v > 1e-7)
-        negative = sorted((v for v in voltages if v < -1e-7), key=abs)
-
-        def pass_solves(pass_voltages: list[float]) -> int:
-            n = 0
-            prev = 0.0
-            for v in pass_voltages:
-                gap = abs(v - prev)
-                n += math.ceil(gap / convergence_dv) if gap > convergence_dv else 1
-                prev = v
-            return n
-
-        # 1 for the initial 0 V solve; each pass warm-starts from the 0 V solution.
-        bias_points = 1 + pass_solves(positive) + pass_solves(negative)
-        return solves_per_point * bias_points + ramp_solves
-
-    def _iter_media_with_locs(self) -> Iterator[tuple[tuple[Any, ...], Any]]:
-        """Yield ``(loc, medium)`` for the background ``medium`` and each structure's medium."""
-        yield ("medium",), self.medium
-        for i, structure in enumerate(self.structures):
-            yield ("structures", i), structure.medium
-
-    def _iter_charge_media(self) -> Iterator[tuple[tuple[Any, ...], AbstractChargeMedium]]:
-        """Yield ``(loc, charge)`` for every charge medium in the simulation.
-
-        Walks both the background ``self.medium`` and each ``Structure.medium``,
-        which the mesher composes together into ``simulation_structure``. Each
-        slot may be a raw charge medium or a :class:`MultiPhysicsMedium` that
-        carries one as ``.charge``; slots with neither are skipped. ``loc`` is the
-        Pydantic field path of the source — ``("medium",)`` for the background,
-        ``("structures", i)`` for a structure — so validators can raise
-        loc-aware errors that point at the right field. Centralising both the
-        traversal and the loc avoids the bugs where iterating only over
-        ``.medium.charge`` (or only over ``structures``) silently misses
-        raw-medium or background-medium configurations.
-        """
-        for loc, medium in self._iter_media_with_locs():
-            charge = self._charge_spec(medium)
-            if isinstance(charge, AbstractChargeMedium):
-                yield loc, charge
-
-    def _iter_semiconductor_charge_media(
-        self,
-    ) -> Iterator[tuple[tuple[Any, ...], SemiconductorMedium]]:
-        """Yield ``(loc, charge)`` for every ``SemiconductorMedium`` in the simulation; see
-        :meth:`_iter_charge_media`."""
-        for loc, charge in self._iter_charge_media():
-            if isinstance(charge, SemiconductorMedium):
-                yield loc, charge
-
-    def _uses_impact_ionization(self) -> bool:
-        """Whether any semiconductor medium enables an impact-ionization model."""
-        for _loc, charge in self._iter_semiconductor_charge_media():
-            for model in charge.R:
-                if isinstance(model, SelberherrImpactIonization):
-                    return True
-        return False
-
-    def _uses_quasi_fermi_driving_force(self) -> bool:
-        """Whether any semiconductor drives a high-field mobility on a quasi-Fermi gradient."""
-        return any(
-            getattr(mobility.field_dependence, "driving_force", None) == "quasi_fermi_gradient"
-            for _loc, charge in self._iter_semiconductor_charge_media()
-            for mobility in (charge.mobility_n, charge.mobility_p)
-        )
-
     def _warn_direct_linear_solver(self) -> Self:
         """Warn about the direct solver's cost, and about the settings it ignores.
 
@@ -1551,23 +1425,3 @@ class HeatChargeSimulation(AbstractSimulation):
                 log_once=True,
             )
         return self
-
-    def _useHeatSourceFromConductionSim(self) -> bool:
-        """Returns True if 'HeatFromElectricSource' has been defined."""
-        return any(isinstance(source, HeatFromElectricSource) for source in self.sources)
-
-    def _get_ssac_frequency_and_amplitude(self) -> tuple[ArrayFloat1D, FiniteFloat]:
-        if not isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
-            raise SetupError(
-                "Invalid analysis type for Small-Signal AC (SSAC). "
-                "SSAC requires a 'SSACAnalysis' or 'IsothermalSSACAnalysis', "
-                f"but received '{type(self.analysis_spec).__name__}' instead."
-            )
-
-        amplitude = None
-        for bc in self.boundary_spec:
-            if isinstance(bc.condition, VoltageBC) and isinstance(
-                bc.condition.source, SSACVoltageSource
-            ):
-                amplitude = bc.condition.source.amplitude
-        return (self.analysis_spec.freqs, amplitude)
