@@ -8,16 +8,12 @@ import autograd.numpy as np
 import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
 from flexcompute.core._migration.em.numerical.raw import microwave as microwave_numerics
-from pydantic import (
-    ValidationError as PydanticValidationError,
-)
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, PECBoundary, Periodic, PMCBoundary
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.grid.grid import Coords, Grid
-from tidy3d.components.grid.grid_spec import _GeneratedGridSizeError
 from tidy3d.components.lumped_element import (
     LinearLumpedElement,
     RectangularLumpedElement,
@@ -38,7 +34,7 @@ from tidy3d.components.two_d_materials import (
     snap_to_dual_cell,
     subdivide,
 )
-from tidy3d.constants import C_0, fp_eps, inf
+from tidy3d.constants import fp_eps, inf
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dError,
@@ -55,9 +51,7 @@ if TYPE_CHECKING:
     import shapely
     from numpy.typing import NDArray
 
-    from tidy3d.compat import Self
     from tidy3d.components.geometry.base import Geometry
-    from tidy3d.components.grid.grid_spec import GridSpec
     from tidy3d.components.lumped_element import LumpedElementType
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.structure import MeshOverrideStructure
@@ -72,14 +66,6 @@ if TYPE_CHECKING:
 from . import constants
 
 
-def _grid_spec_for_auto_grid_size_validation(self: Any) -> GridSpec:
-    """Grid specification used to estimate AutoGrid cell sizes."""
-    grid_spec = self.grid_spec
-    if grid_spec.auto_grid_used and grid_spec.wavelength is None and hasattr(self, "freqs"):
-        return grid_spec.updated_copy(wavelength=C_0 / np.max(self.freqs))
-    return grid_spec
-
-
 def _layerrefinement_boundary_types(self: Any) -> list[list[str | None]]:
     """Boundary types for layer refinement."""
     boundary_types = [[None, None], [None, None], [None, None]]
@@ -90,54 +76,6 @@ def _layerrefinement_boundary_types(self: Any) -> list[list[str | None]]:
             elif isinstance(edge, Periodic | BlochBoundary):
                 boundary_types[dim][side] = "periodic"
     return boundary_types
-
-
-def _validate_auto_grid_size(self: Any) -> Self:
-    """Error if generated grid estimates cell sizes below the supported minimum."""
-    grid_spec = self._grid_spec_for_auto_grid_size_validation()
-    if not grid_spec.snapped_grid_used:
-        return self
-
-    try:
-        _ = self.grid
-    except _GeneratedGridSizeError as err:
-        self._raise_validation_error_at_loc(
-            str(err),
-            "grid_spec",
-            f"grid_{err.axis_name}",
-        )
-    except PydanticValidationError as err:
-        generated_grid_error = self._generated_grid_size_validation_error(err)
-        if generated_grid_error is None:
-            raise
-
-        grid_axis, message = generated_grid_error
-        self._raise_validation_error_at_loc(message, "grid_spec", grid_axis)
-    return self
-
-
-@staticmethod
-def _generated_grid_size_validation_error(
-    err: PydanticValidationError,
-) -> tuple[str, str] | None:
-    """Return generated-grid error loc and message from a nested validation error."""
-    errors = err.errors(include_url=False)
-    if len(errors) != 1:
-        return None
-
-    error = errors[0]
-    loc = tuple(error.get("loc", ()))
-    msg = error.get("msg", "")
-    if (
-        len(loc) == 2
-        and loc[0] == "grid_spec"
-        and loc[1] in ("grid_x", "grid_y", "grid_z")
-        and "generated a minimum grid spacing" in msg
-        and "below the supported minimum" in msg
-    ):
-        return loc[1], msg
-
-    return None
 
 
 @cached_property

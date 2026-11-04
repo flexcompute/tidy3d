@@ -873,15 +873,10 @@ class EMESimulation(AbstractYeeGridSimulation):
         # Folded here because `_as_fdtd_sim` and the grid read the folded `boundary_spec`.
         normalize_boundaries_for_zero_dims(self, warn_on_change=False)
         super()._run_after_validators()
-        self._validate_grid()
         self._validate_eme_grid()
         self._validate_mode_solver_monitors()
         self._validate_cell_index_pairs()
         self._validate_record_in_pml_unsupported()
-        return self
-
-    def _validate_grid(self) -> Self:
-        _ = self.grid
         return self
 
     def _validate_eme_grid(self) -> Self:
@@ -1403,7 +1398,10 @@ class EMESimulation(AbstractYeeGridSimulation):
         This should only be used to obtain the same material properties
         for mode solving or related purposes; the sources and monitors of the
         resulting simulation are not meaningful."""
-        return self._to_fdtd_sim()
+        # The validation that follows construction reports what the checks of this simulation
+        # log, so building it later, for the grid, stays quiet.
+        with log.suppress_output():
+            return self._to_fdtd_sim()
 
     def _to_fdtd_sim(self) -> Simulation:
         """Convert :class:`.EMESimulation` to :class:`.Simulation`.

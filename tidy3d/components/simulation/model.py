@@ -949,19 +949,16 @@ class Simulation(AbstractYeeGridSimulation):
     @model_validator(mode="after")
     @always_validate
     def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
+        """Fold the boundaries of zero-size axes and build the scene."""
         # Fold the boundaries of zero-size axes here because public code reads the folded
         # `boundary_spec`: the grid build, `num_pml_layers` and the solver upload. The translation
-        # folds them too, and their checks are a rule of the FDTD scope.
+        # folds them too, and their checks, the AutoGrid wavelength check and the generated grid
+        # size check are rules of the FDTD scope.
         normalize_boundaries_for_zero_dims(self)
         if fast_validation_active():
             # fast mode keeps only the fold; every other call in this chain checks and would be
             # skipped by the class-level guard
             return self
-        # The parent hooks add only the grid size check and the monitor and structure containment
-        # checks. This simulation runs the containment checks later, while it validates, and calls
-        # the grid size check itself. The EME, mode and heat-charge simulations call those hooks.
-        self._validate_auto_grid_size()
 
         # Build the scene, then warn about RF licensing.
         self._validate_scene()

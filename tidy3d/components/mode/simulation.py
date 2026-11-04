@@ -275,7 +275,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
         super()._run_after_validators()
         self._validate_record_in_pml_unsupported()
         self._validate_mode_solver()
-        self._validate_grid()
         return self
 
     @cached_property
@@ -298,10 +297,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def _validate_mode_solver(self) -> Self:
         _ = self._mode_solver
-        return self
-
-    def _validate_grid(self) -> Self:
-        _ = self.grid
         return self
 
     @cached_property
@@ -407,13 +402,15 @@ class ModeSimulation(AbstractYeeGridSimulation):
         # would log a warning about this, but we don't want that since ModeSimulation
         # handles it silently.
 
-        # Create the simulation - it will run its own validators
-        return self._fdtd_simulation_type(
-            **kwargs,
-            run_time=RUN_TIME,
-            grid_spec=grid_spec,
-            monitors=(),
-        )
+        # Create the simulation - it will run its own validators. The validation that follows
+        # construction reports what their checks log, so they stay quiet here.
+        with log.suppress_output():
+            return self._fdtd_simulation_type(
+                **kwargs,
+                run_time=RUN_TIME,
+                grid_spec=grid_spec,
+                monitors=(),
+            )
 
     @classmethod
     def from_simulation(

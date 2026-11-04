@@ -15,6 +15,7 @@ from pydantic import ValidationError as PydanticValidationError
 from pydantic_core import InitErrorDetails
 
 from tidy3d.em.translate.base import apply_translators
+from tidy3d.em.translate.core_log import relay_core_log
 from tidy3d.em.translate.map import (
     COMPONENT_ERROR_TYPES,
     COMPONENT_SCOPES,
@@ -298,10 +299,13 @@ def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:
     passed = model._cached_properties.get(_VALIDATED_ON_CONSTRUCTION)
     if passed is not None and all(map(is_, passed, values)):
         return model
-    for facade in inherited:
-        _present(model, resolve(facade)(cast("_KeepsCore", model)._core).diagnostics)
-    if translated:
-        _present(model, validate(model))
+    # The schema logs through the core logger while its rules run, for example the warnings of
+    # its grid build, so relay them to the Tidy3D log.
+    with relay_core_log():
+        for facade in inherited:
+            _present(model, resolve(facade)(cast("_KeepsCore", model)._core).diagnostics)
+        if translated:
+            _present(model, validate(model))
     if not _changes_in_place(model):
         model._cached_properties[_VALIDATED_ON_CONSTRUCTION] = _PassedValues(values)
     return model

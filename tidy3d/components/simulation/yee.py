@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import (
     Field,
     field_validator,
-    model_validator,
 )
 
 from tidy3d._runtime import always_validate
@@ -23,7 +22,6 @@ from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from tidy3d.compat import Self
     from tidy3d.components.structure import Structure
 
 
@@ -187,12 +185,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     _validate_record_in_pml_unsupported = _monitors_methods._validate_record_in_pml_unsupported
 
     # YeeGrid
-    _grid_spec_for_auto_grid_size_validation = (
-        _grid_methods._grid_spec_for_auto_grid_size_validation
-    )
     _layerrefinement_boundary_types = _grid_methods._layerrefinement_boundary_types
-    _validate_auto_grid_size = _grid_methods._validate_auto_grid_size
-    _generated_grid_size_validation_error = _grid_methods._generated_grid_size_validation_error
     _internal_layerrefinement_boundary_types = (
         _grid_methods._internal_layerrefinement_boundary_types
     )
@@ -260,13 +253,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                     f"'{type(structure.medium).__name__}'."
                 )
         return val
-
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._validate_auto_grid_size()
-        return self
 
     @cached_property
     def _subpixel(self) -> SubpixelSpec:
