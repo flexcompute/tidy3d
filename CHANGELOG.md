@@ -9,6 +9,183 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.13.0.dev1] - 2026-11-04
+
+### Added
+
+- Added `EMEModeSolverMonitor.direction`, `EMESimulationData.port_modes_backward` and directional basis conversion for EME cells with distinct forward and backward modes.
+- For EME results with `port_modes_backward`, `smatrix_in_basis` requires paired forward/backward bases per changed port, while `field_in_basis` also accepts a basis matching the excitation direction; these conversions require `tidy3d-extras` and an EME license.
+- `CurrentBC` now drives charge contacts by total terminal current and solves their potentials, with support for multiple current-driven contacts, ohmic and Schottky contacts, and one swept `DCCurrentSource.current` on the accelerated charge solver.
+- Current-driven contacts support small-signal analysis as open circuits, except isolated zero-current contacts, which must be the only current-driven contact and warn that their potential depends on the initial state.
+- An ohmic `CurrentBC` may share a placement with `SurfaceRecombinationBC` or reach a heterojunction, but cannot do both; a nonzero current on a contact with no path to another contact is rejected.
+- Current-sweep results are indexed by the solved potential of the swept contact.
+- Added loss current density `Jx_loss`/`Jy_loss`/`Jz_loss` on `FieldStructureData` and `colocate_loss_current_density(...)` to place the components on common coordinates.
+- Added `ProtectedDopingRef` for hosted charge simulations with surrogate-only local previews and encrypted doping profiles carried in HDF5; optical simulations and mode calculations ignore these references.
+- Hosted charge runs with `ProtectedDopingRef` require the accelerated solver and at least two voltage points, allow only whole-domain `SteadyCapacitanceMonitor` recording, and omit solver logs and residual/CFL traces.
+- Added `SimulationData.specific_absorption_rate(...)` and `specific_absorption_rate_from_densities(...)` for point SAR in W/kg using a `FieldStructureMonitor` and material mass densities.
+- SAR calculations require mass densities for absorbing media, supplied by their heat media or explicitly in kg/um^3; 2D materials, lumped elements and automatic PEC frames contribute zero.
+- Added `ProtectedOpticalMediumRef` for hosted FDTD and `ModeSimulation` with surrogate-only local previews and encrypted HDF5 payloads; JSON/YAML contain placeholders, and local solving, adjoint workflows and result renormalization are unsupported.
+- Added `SurfaceFieldStructureMonitor` and `SurfaceFieldStructureData` for surface fields and electromagnetic surface-loss density on PEC and lossy-metal structures, including symmetry and overlap with 2D materials, lumped elements and automatic PEC frames.
+- Added `SimulationData.per_structure_loss(...)` for surface and volumetric electromagnetic losses by structure in 3D; supply the corresponding monitors at matching frequencies, with unsampled losses reported as NaN.
+- Added `ModeStructureMonitor`, `ModeStructureData` and `ModeSimulationData.field_structure(...)`, `optical_generation(...)` and `per_component_optical_generation(...)` for structure-resolved mode optical generation; the monitor requires `colocate=False` and all three electric-field components.
+- Added experimental meshing for 3D heat, charge and conduction simulations through `mesher="experimental"` on unstructured grid specifications; `AutoUnstructuredGrid` is unsupported.
+- The `TriangleMesh` constructors `from_stl`, `from_trimesh`, `from_triangles`, `from_vertices_faces`, `from_height_grid` and `from_height_function` take `remove_degenerate_faces` to remove near-zero-area triangles before building the mesh.
+- Added automatic differentiation for `GeometryArray` base-geometry parameters, instance offsets and invertible instance transforms, and for geometry parameters and invertible affine matrices in `Transformed`.
+- Added autograd support for `PolySlab.bulges`, and for `vertices` and `slab_bounds` of arc-containing `PolySlab`s, when `sidewall_angle=0` and `dilation=0`.
+- Added `LombardiSurfaceDependence` through `CaugheyThomasMobility.surface_dependence` and `MasettiMobility.surface_dependence` for accelerated charge simulations; these models now serialize the field, so new files do not load in older clients.
+- Added `TransferredElectronFieldDependence`, a high-field mobility model with the negative differential mobility of direct-gap III-V semiconductors, driven by the electric field or the quasi-Fermi gradient and selectable through `field_dependence` alongside `CanaliFieldDependence` (accelerated charge solver only).
+- Added autograd gradients for supported `ThinLensBeam` parameters and `ThinLensOverlapMonitor` amplitudes in fixed homogeneous, isotropic, lossless plane media.
+- Added `AlloyMobility`, the low-field mobility of a III-V alloy harmonically interpolated between two `CaugheyThomasMobility` end members by mole fraction, with an optional alloy-scattering term (accelerated charge solver only).
+- Added temperature-dependent thermal conductivity and heat capacity on `SolidMedium`, including anisotropic conductivity and `InversePolynomialConductivity.from_resistivity(...)` for thermal-resistivity fits.
+- Temperature-dependent thermal properties support heat simulations with conduction heat sources and accelerated self-heating charge simulations; models are clamped to `temperature_range`, and heat capacity has no effect in steady charge analyses.
+- `SteadyGenerationRecombinationData` now reports active `shockley_reed_hall`, `auger`, `radiative`, `band_to_band_tunneling` and `distributed_generation` rates alongside `impact_ionization`, summing to `net_recombination`.
+- Added quasi-Fermi-gradient-driven velocity saturation through `CanaliFieldDependence.driving_force` and `reference_density` on the accelerated charge solver; the default remains `"electric_field"`, and quasi-Fermi-driven DC solves may take up to twice as long.
+- `CanaliFieldDependence` now serializes `driving_force`, so files written by this version do not load in older clients.
+- Added `HeterojunctionSurfaceShockleyReedHallRecombination` and `HeterojunctionCaptureSide` for interface-trap recombination at a heterojunction, with per-side capture velocities.
+- Added `LVSRunner` and `LVSResults` to the KLayout plugin for running KLayout's layout versus schematic (LVS) checks and loading their results.
+- Added `Simulation.check_ports_reach_pml()` to identify mode ports whose connected structures do not span the absorbing layer, accounting for extrusion and grouped or unioned geometries.
+- Set `config.validation.check_ports_reach_pml=True` for pre-upload mode-port warnings in full validation; warnings are disabled by default and skipped in fast mode, while the helper remains callable in any validation mode.
+- Added second-order subpixel-smoothed projection through `smoothed_projection(..., order=2)` and `projection="ssp2"` in autograd and inverse-design filter-and-project helpers.
+- Filter-and-project helpers also accept `projection="ssp1"` and periodic SSP derivatives with `padding="wrap"`; the design plugin requires 2D grids with equal physical cell spacing.
+- Added `AnisotropicPermittivity` for charge media on the accelerated solver, with principal values and rotation or `from_components(...)` tensor construction and plotting of global-frame components.
+- For strongly anisotropic charge permittivity, `linear_solver="direct"` is recommended; conduction simulations still require scalar permittivity.
+- The accelerated charge solver warns when the `MasettiMobility` formula is not positive at some nodes for the local temperature and doping, where it sets the mobility to zero.
+- Added `FieldStructureTimeMonitor` and `FieldStructureTimeData` for time-domain fields, static-conductivity loss current and power density, and instantaneous per-structure loss through `SimulationData.per_structure_loss(...)`.
+- Time-domain loss reports NaN with a warning for lossy dispersive or nonlinear media and for surface-impedance metals without surface-loss recording; fully anisotropic and time-modulated media are unsupported.
+- Added `record_in_pml=False` to field, medium, permittivity, flux and field-projection monitors to exclude PML/absorber layers from recordings and integration surfaces; the default is `True`, and the option is unavailable in `EMESimulation` and `ModeSimulation`.
+- On the accelerated charge solver, a self-heating charge simulation now accepts `AnisotropicConductivity`, `RadiationBC`, a `ConvectionBC` with a positive `emissivity`, `ThermalContactResistance` except between two semiconductors or on a conductor, and `SolidMedium.velocity` except on a semiconductor.
+- Added company shared workspace selection through `config.workspace.default` and helpers to move or duplicate tasks, list workspaces and members, and inspect activity; private remains the default workspace.
+- `Simulation` accepts `LumpedVoltageSource`, the ideal voltage source FlexRF provides, and before upload rejects one that cannot set its voltage where the grid places it.
+- Added `bh_strategy`, `velocity_clamp` and `init_velocity` to `tidy3d.plugins.design.MethodParticleSwarm`, exposing the pyswarms boundary handling, velocity clamp and initial swarm velocities.
+- Added `ChargeToleranceSpec.linear_rel_tol`, the factor by which the iterative linear solver reduces the residual of the linear system at each nonlinear iteration of a charge simulation (default `1e-2`).
+- Log remote simulation cache hits when `verbose=True` and correctly report their zero cost.
+- `SurfaceFieldTimeMonitor` now accepts `sampling_dt` and `num_samples` to set its recording cadence in physical time or as a sample count, like `FieldTimeMonitor` and `FluxTimeMonitor`.
+- With the accelerated charge solver, `SelberherrImpactIonization(formulation="GradQuasiFermi")` now also runs with self-heating and prescribed-temperature analyses (`SteadyChargeDCAnalysis`, `SSACAnalysis`), evaluating the quasi-Fermi levels at the local lattice temperature.
+- Added incomplete dopant ionization through `SemiconductorMedium.donor_ionization` and `acceptor_ionization`, with `PearsonBardeenIonization`, `AltermattSchenkIonization`, `MultiSiteIonization` and `SteadyDopingMonitor` on the accelerated charge solver.
+- Incomplete-ionization capacitance includes carriers bound to dopants, and `SlotboomBandGapNarrowing` preserves its fitted equilibrium minority-carrier density; media without an ionization model are unchanged.
+- Added `DeviceCharacteristics.ac_photocurrent_voltage`, `ac_admittance_voltage` and `ac_capacitance_voltage` for accelerated charge small-signal analyses, reporting the response at the `SSACVoltageSource` contact versus bias and frequency.
+- With `DistributedGeneration`, `ac_photocurrent_voltage` reports short-circuit photocurrent per unit generation-modulation depth for photodetector responsivity and transit-limited bandwidth calculations.
+- Added Pockels and DC Kerr electro-optic perturbations through `ElectroOpticPerturbation` and `PerturbationAnisotropicMedium`, using `perturbed_mediums_copy(electric_field=...)`; only diagonal impermeability changes in simulation coordinates are applied.
+
+### Changed
+
+- When passing `field_dependence` as a dictionary to a mobility model, include `"type": "CanaliFieldDependence"` or `"type": "TransferredElectronFieldDependence"`; passing model objects and loading saved simulations are unaffected.
+- When passing `SurfaceRecombinationBC.model` as a dictionary, include `"type": "SurfaceShockleyReedHallRecombination"` or `"type": "HeterojunctionSurfaceShockleyReedHallRecombination"`; passing model objects and loading saved simulations are unaffected.
+- On EME results without backward port modes, `smatrix_in_basis` and `field_in_basis` now reject a single backward basis; local EME requires forward mode data and rejects cells with non-diagonal `FullyAnisotropicMedium`, which should be run on the server.
+- `SemiconductorMedium` materials whose `N_c`, `N_v`, `E_g` and `electron_affinity` agree within a 1e-12 relative tolerance, including ones that differ only in `attrs` or in the form of an equal effective DOS, now meet as a same-material junction, which accepts `SurfaceShockleyReedHallRecombination` and has no thermionic emission.
+- A self-heating `SteadyChargeDCAnalysis` or `SSACAnalysis` no longer requires a `TemperatureMonitor`, and warns when no `TemperatureBC` or `ConvectionBC` removes the heat or a semiconductor has no `heat` medium.
+- Sped up autograd tracer detection for models containing large numeric data arrays.
+- Updated EME FlexCredit, runtime, memory and storage estimates for anisotropic cells requiring distinct forward and backward modes, including frequency interpolation.
+- `CurrentBC.source` now specifies total terminal current in amperes, or amperes per micron of device depth in 2D, and symmetry applies to the whole-device current rather than a manually reduced current.
+- An isothermal or prescribed-temperature charge analysis now warns about heat boundary conditions and heat sources, which it never applied.
+- Sped up loading individual monitors from large result files.
+- Rejected `symmetry` along the zero-size axis of a 2D `HeatChargeSimulation`, which the solvers could not mesh.
+- A charge simulation now rejects a semiconductor whose electron and hole mobility models are of different types, which the solver refused only after submission.
+- On the accelerated charge solver, a missing `electron_affinity` that decides the band offset between two semiconductors now warns.
+- A `SemiconductorMedium.R` that lists a mechanism twice, except `DistributedGeneration`, now warns that only one entry is used.
+- Multifrequency diffraction objectives in periodic simulations can now share adjoint runs when their in-plane wavevectors match.
+- Reduced Tidy3D import time, including in the web GUI.
+- Sped up autograd gradient computation and reduced its peak memory for `CustomMedium` gradients.
+- Sped up structure plots (`plot`, `plot_eps`, and heat/charge property plots) for scenes with many structures or large `GeometryGroup`s.
+- `HeatChargeSimulation` warns when all its contact entries name one metal structure with one source, since the charge simulation then has a single terminal.
+- `FieldStructureMonitor` now supports overlap with 2D materials, lumped elements and automatic PEC frames; lumped elements and PEC frames use `structure_index=-2`.
+- A self-heating charge simulation now warns that the heat medium of a `ChargeConductorMedium` is not used, since conductors take no part in its heat solve.
+- `Medium2D.volumetric_equivalent` now returns `Medium` for constant-conductivity components, reducing time-stepping cost for lumped resistors, parallel RC networks and conductive 2D sheets without unnecessary pole-residue terms.
+- With the accelerated charge solver, `HeatChargeSimulation` now warns when two `SemiconductorMedium` media that may meet have the same `N_c`, `N_v`, `E_g` and `electron_affinity` but a different `delta_E_g`, a difference that acts as a voltage source where they meet.
+- Baseband source times now derive their characteristic frequency and `frequency_range()` from their fastest 10%-to-90% transition, so automatic grids without a `wavelength` resolve the transitions and mode sources solve at that frequency; the new optional `freq0` sets the frequency explicitly and is needed for steeply angled plane waves.
+- Sped up `PolySlab.inside` for polygon slabs with a slanted sidewall (`sidewall_angle != 0`).
+- Avoided loading web dependencies when importing `tidy3d.plugins.dispersion`.
+
+### Fixed
+
+- Fixed EME mode matching, backward propagation and port-mode normalization for non-diagonal `FullyAnisotropicMedium` and anisotropic bends with `bend_medium_frame="global"`, keeping lossy port modes consistent with the S-matrix basis.
+- Fixed overestimated gradients with respect to uniform medium parameters for structures crossing a periodic or Bloch boundary.
+- On the accelerated charge solver, a doping box that ends on a contact or on a boundary of a semiconductor now dopes the nodes on that boundary, which rounding of the box bounds could leave undoped and turn an ohmic contact into a barrier.
+- Fixed the electric field and current density of 2D charge simulations with `use_accelerated_solver=True` in the xz or yz plane, which dropped their z component.
+- `HeatChargeSimulation` accepts a swept or SSAC-driven metal named by several `boundary_spec` entries with the same source on the accelerated charge solver.
+- Corrected the sign of `DeviceCharacteristics.steady_dc_electron_capacitance` to match `SteadyCapacitanceData.electron_capacitance`, making both electron and hole capacitances positive in reverse bias.
+- `Scene.plot_eps` and `Scene.eps_bounds` now plot static permittivity for charge-only `MultiPhysicsMedium`.
+- Corrected complex-output gradients in the PyTorch wrapper.
+- Fixed conversions between lossless `CustomMedium` and `CustomPoleResidue` models when conductivity is absent.
+- Included custom-pulse delays in automatic simulation run times.
+- Fixed `EMECoefficientMonitor` `n_complex` and `flux` data being stored under the wrong mode index in cells that drop an invalid mode, which also made `EMECoefficientDataset.normalized_copy` scale `A` and `B` by another mode's flux.
+- Fixed the frequency scaling of gradients with respect to the imaginary part of a `CustomMedium.eps_dataset` for objectives at several frequencies.
+- In a 2D charge simulation on the accelerated charge solver, doping boxes and `CustomDoping` or `DistributedGeneration` data that are finite along the out-of-plane axis are now taken at the simulation plane instead of losing a mesh-dependent part of the doping or generation.
+- Fixed `DeviceCharacteristics` to report whole-device results for charge simulations with `symmetry` and `use_accelerated_solver=True`.
+- Corrected the docs of `ChargeToleranceSpec.rel_tol`, the 2D `steady_dc_resistance_voltage` depth conversion and the `HurkxDirectBandToBandTunneling` example.
+- Charge simulations now reject before upload Cartesian `TemperatureMonitor` recording and Cartesian `SteadyPotentialMonitor` recording in 2D or bias sweeps, preventing failed solves and incorrect recorded fields.
+- `plot_structures_eps` with `scale="symlog"` and automatic limits no longer raises when the minimum permittivity is negative.
+- Fixed autograd filters to preserve complex convolution results and constant-padding Gaussian-filter gradients, and to handle one-pixel conic filters and per-axis kernel sizes on inputs with singleton dimensions.
+- Preserved `allow_gain` when converting between diagonal and fully anisotropic media.
+- Avoided numerical cancellation when computing Gaussian pulse widths for narrow frequency ranges.
+- An `InsulatingBC` that covers a contact face no longer replaces the contact, whatever the order of `boundary_spec`, unless its placement names the contact's metal.
+- Fixed the `SteadyCapacitanceData` documentation to describe the central difference the capacitance uses.
+- Fixed conductivity-axis resolution in fully anisotropic media with repeated principal permittivities.
+- Fixed resonance analysis accepting mismatched sampling intervals by comparing time steps with a relative tolerance.
+- A contact placed with `StructureStructureInterface` on one of several structures of one semiconductor medium no longer splits that medium at the faces between those structures, which with impact ionization could stop a sweep from converging.
+- Preserved pixel positions and gradients in ramp projections.
+- Fixed plotting of fully anisotropic media with principal permittivities or passive conductivities accepted within numerical tolerance.
+- Fixed the potential reference on the accelerated charge solver to follow `VoltageBC`: the background semiconductor's electron affinity, otherwise that of the lowest-priority semiconductor structure.
+- Preserved supplied medium settings in `Lorentz.from_nk` when the extinction coefficient is zero.
+- The `GaussianDoping` documentation now gives the concentration at box edges and corners, and in a box thinner than twice `width` the plotted doping and the legacy charge solver now use the same profile as the accelerated charge solver.
+- Preserved coordinates of singleton charge samples while accepting unlabeled singleton arrays in custom charge perturbations.
+- Fixed `BacktrackingSafeUpdate` recovery for parameter arrays with different memory layouts.
+- Fixed `IndexPerturbation.from_perturbation_delta_model` to evaluate delta values at the model reference frequency.
+- Corrected the complex phase shown in perturbation plots.
+- Preserved negative real permittivity in `DispersionFitter.from_complex_permittivity` when the imaginary part is omitted.
+- Fixed optical permittivity queries, local mode solves and conductor-priority handling for `MultiPhysicsMedium` by using its optical component.
+- `MultiPhysicsMedium` optical queries now report a missing `optical` field, and wrapping `Medium2D` is rejected at validation.
+- Fixed zero `PolySlab.slab_bounds` gradients in two-dimensional simulations when the slice coordinate cannot be represented exactly in single precision.
+- Fixed crashes in `PolySlab` geometry queries and plotting when its fields are traced by autograd; side-plane and tilted-plane intersections of a traced `PolySlab` now raise a clear error instead.
+- Corrected temporal normalization of adjoint gradients for beam and custom field/current source parameters, including source bandwidth and forward normalization settings.
+- Fixed `MasettiMobility` validation to check the high-doping asymptote at 300 K and the heat-boundary temperatures when the lattice temperature is solved for or not prescribed, instead of skipping the check.
+- Fixed adjoint gradients for `PolySlab.slab_bounds` and axial `Cylinder.center`/`length` with a nonzero `sidewall_angle`.
+- Fixed loading results without a solver log.
+- Fixed `Simulation.to_gdstk`, `to_gds` and `to_gds_file` exports of structures extending infinitely across the export plane, including custom media, by clipping them to simulation bounds.
+- Non-isothermal charge simulations now reject solids without a charge medium before upload; use `ChargeInsulatorMedium(permittivity=...)` for insulating solids, including the background, while isothermal charge simulations are unaffected.
+- Fixed simulation PML warnings so each structure bound is checked against the boundary condition and PML thickness for its own axis and side.
+- `HeatChargeSimulation` now logs each `linear_solver='direct'` warning once, instead of on every validation, so parameter sweeps and `Batch` runs no longer repeat it for every simulation.
+- Fixed spurious growing modes in lossless mode solves, including magnetic-wall symmetry, and corrected normalization and orthogonalization weights at boundary cells and single-cell invariant axes.
+- Fixed incorrect autograd gradients for `FieldMonitor` objectives in simulations with `symmetry`, including point monitors when `config.adjoint.parallel_run` is enabled.
+- Fixed import-order-dependent failures with model subclasses, including inverse-design metrics.
+- Fixed single-bias charge field monitors to use the same `voltage` coordinate as `device_characteristics`, including when a grounded contact is listed first.
+- Fixed `HeatChargeSimulation.plot` and `plot_boundaries` boundary-condition plots for overlapping structures, multipart regions and holes; simulation results are unaffected.
+- The Schottky barrier check on a `VarshniEnergyBandGap` semiconductor now uses the contact's lattice temperature, or the coldest heat-sink temperature in a self-heating run, instead of twice the simulation temperature.
+- Fixed ohmic and Schottky contact voltage offsets with band-gap narrowing in accelerated charge simulations, shifting potential and energy-band outputs by up to half the local narrowing and potentially changing flat-band and breakdown voltages.
+- Charge simulations combining `SlotboomBandGapNarrowing` with `fermi_dirac=True` no longer count carrier degeneracy twice, which changes results in regions doped above about 1e19 cm^-3.
+- Broadband `PlaneWave` sources with a fixed in-plane wave vector (`FixedInPlaneKSpec`) in a dispersive background medium now inject the same in-plane wave vector at every frequency, the one their Bloch boundaries are set from.
+- Corrected `PolySlab` vertex gradients in two-dimensional simulations and for nonzero `dilation` or `sidewall_angle`, including PEC cross-sections.
+- Optical homogeneity checks for sources, monitors, field projection, and automatic absorbing boundaries ignore medium names and user attributes when the optical models match.
+- Fixed local subpixel mode simulation results to use public Tidy3D data classes, allowing current and voltage integrals to accept the returned modes.
+- Fixed `FieldProjector.from_near_field_data` projections from monitors extending into PML, including infinite monitors and windowed projections with `use_colocated_integration=False`.
+- Fixed the accelerated charge solver giving the wrong current where two `SemiconductorMedium` media with the same band parameters and `delta_E_g` but different doping meet, such as separate n- and p-doped silicon media with `SlotboomBandGapNarrowing`.
+- Fixed adjoint shape gradients next to acute or curved geometry edges, where the inside or outside permittivity was sampled on the wrong side of the adjacent face.
+- `DiffractionData.amps` and `DiffractionData.power` now report zero for a diffraction order at frequencies where it is evanescent, and new runs also store zero diffraction fields there.
+- Corrected shape gradients for PEC, PEC2D and surface-impedance lossy metals, including cutouts, dielectric contacts, uniform reciprocal anisotropic surroundings and two-dimensional simulations.
+- Adjoint setup now warns when nearby metal, strongly curved surfaces, sources, monitors or unsupported surrounding media can reduce metal shape-gradient accuracy.
+- Metal shape-gradient calculations now raise `AdjointError` before allocating data beyond `config.adjoint.memory_allotment_fraction` of available memory.
+- Fixed `SelberherrImpactIonization` keeping the accelerated charge solver from converging at biases where the device current is negligible, such as a diode near 0 V or at low reverse bias, most often with the default `formulation="PQ"`; the generation-recombination monitor reports zero impact-ionization generation where both carrier currents are below numerical resolution.
+- `DiffractionMonitor` amplitudes of nonzero orders no longer carry a grid-dependent phase error (about `pi * m / N` for order `m` with `N` cells per period).
+- Fixed accelerated charge DC sweeps into strong inversion stopping short of thermal equilibrium, including MOS capacitors with no minority-carrier contact.
+- Isothermal equilibrium sweeps without generation, tunneling or impact ionization now converge more quickly when contacts on connected semiconductor structures share one voltage, including on fine interface meshes.
+- Fixed `EMESimulation` raising a generic `size` error instead of the `port_offsets` error when the two `port_offsets` add up to more than `size` along `axis`; the error now reports the offsets, their sum, and the size.
+- Fixed `AutoGrid` failing with "AutoGrid coordinates ... do not match the simulation domain" when a snapping point lies on or within `dl_min` of a simulation edge, a structure extends past that edge, and unshadowed mesh overrides are present, as with `LayerRefinementSpec` corner refinement.
+- Logging from several threads at once, as `Batch` uploads do, no longer fails intermittently inside the logger or mixes warning consolidation, capture or output suppression between threads.
+- Corrected `cSi` material-library variant `Si_MultiPhysics` electron mobility from 1471 to 1417 cm²/V/s, reducing lightly doped values by up to 3.7%; set `mobility_n.mu=1471.0` to reproduce previous results.
+- Fixed `PerturbationMedium.perturbed_copy` dropping the base `conductivity` of a lossy medium when its heat or charge perturbation changes only the permittivity, which made the perturbed medium lossless.
+- Fixed `ComplexPolySlab.inside` misclassifying points at heights where the offset polygon self-intersects.
+- Status checks, cost estimation, and monitoring of a blocked RF component modeler task now raise a `WebError` containing the server's block message.
+
+### Breaking Changes
+
+- `CurrentBC` is no longer accepted in conduction simulations, on the non-accelerated charge solver, or on contacts touching only insulators.
+- Constructing `BroadbandPulse` now requires the `tidy3d-extras` package, including when the pulse is not yet attached to a source.
+- `ChargeInsulatorMedium`, `ChargeConductorMedium` and `SemiconductorMedium` no longer provide optical methods such as `eps_model`; read static `permittivity` instead and use `MultiPhysicsMedium(optical=..., charge=...)` for optical simulations.
+- Charge media no longer accept `heat_spec` or optical settings (`frequency_range`, `allow_gain`, `nonlinear_spec`, `modulation_spec`); use `MultiPhysicsMedium(heat=..., charge=...)` for thermal coupling, while loaded legacy optical settings warn and are ignored.
+- A `TriangleMesh` with near-zero-area triangles now fails validation instead of having those triangles removed automatically; pass `remove_degenerate_faces=True` to the constructor that builds it, such as `TriangleMesh.from_stl` or `TriangleMesh.from_triangles`, to remove them.
+- `NumericalStructureConfig.compute_derivatives` no longer receives `derivative_helper`; the derivatives it needs are now declared as `NumericalDerivativeQuery` entries in `derivative_queries` and passed to it as `query_results`.
+- `PointCloudFieldMonitor`, `PointCloudPermittivityMonitor` and `DipoleEmissionMonitor` are no longer `Box` subclasses; `center`, `size` and `bounds` are read-only and come from the bounding box of `points`.
+
 ## [2.13.0.dev0] - 2026-09-30
 
 ### Added
@@ -2462,6 +2639,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.13.0.dev1]: https://github.com/flexcompute/tidy3d/compare/v2.13.0.dev0...v2.13.0.dev1
 [2.13.0.dev0]: https://github.com/flexcompute/tidy3d/compare/v2.12.1...v2.13.0.dev0
 [2.12.1]: https://github.com/flexcompute/tidy3d/compare/v2.12.0...v2.12.1
 [2.12.0]: https://github.com/flexcompute/tidy3d/compare/v2.11.2...v2.12.0
